@@ -19,8 +19,13 @@
   <main class="page">
     <div class="page-header">
       <h2>Productos</h2>
-      <button id="btnNuevo" class="btn btn-primary">+ Nuevo producto</button>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button id="btnNuevo" class="btn btn-primary">+ Nuevo producto</button>
+        <button id="btnExportar" class="btn btn-secondary">Exportar</button>
+        <button id="btnImportar" class="btn btn-secondary">Importar</button>
+      </div>
     </div>
+    <input type="file" id="fileInput" accept=".json" style="display:none">
     <div class="search-bar">
       <input type="text" id="searchInv" placeholder="Buscar producto...">
     </div>
@@ -146,6 +151,41 @@
     document.getElementById('btnCancelar').addEventListener('click', () => document.getElementById('modalProducto').classList.add('hidden'));
     document.querySelector('.modal-close').addEventListener('click', () => document.getElementById('modalProducto').classList.add('hidden'));
     document.getElementById('searchInv').addEventListener('input', e => cargarTabla(e.target.value));
+
+    document.getElementById('btnExportar').addEventListener('click', () => {
+      const data = JSON.stringify(getProductos(), null, 2);
+      const blob = new Blob([data], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'inventario-' + new Date().toISOString().split('T')[0] + '.json';
+      a.click();
+      URL.revokeObjectURL(url);
+    });
+
+    document.getElementById('btnImportar').addEventListener('click', () => {
+      document.getElementById('fileInput').click();
+    });
+
+    document.getElementById('fileInput').addEventListener('change', e => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = function(ev) {
+        try {
+          const data = JSON.parse(ev.target.result);
+          if (!Array.isArray(data)) throw new Error('Formato inválido');
+          if (!confirm('Importar ' + data.length + ' productos? Se reemplazará todo el inventario actual.')) return;
+          setProductos(data);
+          cargarTabla(document.getElementById('searchInv').value);
+          alert('Inventario importado correctamente');
+        } catch (err) {
+          alert('Error al importar: ' + err.message);
+        }
+      };
+      reader.readAsText(file);
+      e.target.value = '';
+    });
 
     cargarTabla();
   </script>
