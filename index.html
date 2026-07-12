@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>POS - Recaudo</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-left">
+      <h1>POS Recaudo</h1>
+      <span class="folio">Folio: <strong id="folioDisplay">001</strong></span>
+    </div>
+    <nav class="topbar-nav">
+      <a href="index.html" class="active">Cobro</a>
+      <a href="inventario.html">Inventario</a>
+      <a href="reportes.html">Reportes</a>
+    </nav>
+  </header>
+
+  <main class="pos-layout">
+    <section class="pos-left">
+      <div class="search-box">
+        <input type="text" id="searchInput" placeholder="Buscar producto por nombre o c&oacute;digo..." autofocus>
+        <div id="searchResults" class="search-results"></div>
+      </div>
+      <div class="product-list-header">
+        <h3>Productos</h3>
+        <span id="productCount">0</span>
+      </div>
+      <div id="productList" class="product-grid"></div>
+    </section>
+
+    <section class="pos-right">
+      <div class="ticket-header"><h2>Ticket de venta</h2></div>
+      <div id="ticketItems" class="ticket-items"><div class="ticket-empty">Agrega productos al ticket</div></div>
+      <div class="ticket-total"><span>Total:</span><span id="totalDisplay">$0.00</span></div>
+      <div class="ticket-actions">
+        <button id="btnCobrar" class="btn btn-primary" disabled>Cobrar (F8)</button>
+        <button id="btnLimpiar" class="btn btn-secondary" disabled>Limpiar (F9)</button>
+      </div>
+    </section>
+  </main>
+
+  <div id="pesoModal" class="modal hidden">
+    <div class="modal-content">
+      <span class="modal-close">&times;</span>
+      <h3>Asignar peso</h3>
+      <p>Producto: <strong id="pesoProductoNombre"></strong></p>
+      <p style="font-size:0.85rem;color:var(--text-light);margin-top:-8px;margin-bottom:12px">Precio por kg: <strong id="pesoPrecioKg"></strong></p>
+      <input type="number" id="pesoInput" step="0.001" min="0.001" placeholder="Peso en kg">
+      <div class="modal-buttons">
+        <button id="btnPesoConfirmar" class="btn btn-primary">Confirmar</button>
+        <button id="btnPesoCancelar" class="btn btn-secondary">Cancelar</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

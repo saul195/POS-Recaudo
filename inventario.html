@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Inventario - Recaudo</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-left"><h1>Inventario</h1></div>
+    <nav class="topbar-nav">
+      <a href="index.html">Cobro</a>
+      <a href="inventario.html" class="active">Inventario</a>
+      <a href="reportes.html">Reportes</a>
+    </nav>
+  </header>
+
+  <main class="page">
+    <div class="page-header">
+      <h2>Productos</h2>
+      <button id="btnNuevo" class="btn btn-primary">+ Nuevo producto</button>
+    </div>
+    <div class="search-bar">
+      <input type="text" id="searchInv" placeholder="Buscar producto...">
+    </div>
+    <table>
+      <thead>
+        <tr><th>C&oacute;digo</th><th>Nombre</th><th>Categor&iacute;a</th><th>Precio</th><th>Stock</th><th>Tipo</th><th>Acciones</th></tr>
+      </thead>
+      <tbody id="invBody"></tbody>
+    </table>
+  </main>
+
+  <div id="modalProducto" class="modal hidden">
+    <div class="modal-content">
+      <span class="modal-close">&times;</span>
+      <h3 id="modalTitle">Nuevo producto</h3>
+      <input type="hidden" id="editId">
+      <div class="form-grid">
+        <div><label>C&oacute;digo de barras</label><input type="text" id="formCodigo" placeholder="Opcional"></div>
+        <div>
+          <label>Categor&iacute;a</label>
+          <select id="formCategoria">
+            <option value="">Sin categor&iacute;a</option>
+            <option>Frutas</option><option>Verduras</option><option>Sabritas</option>
+            <option>Gamesa</option><option>Bimbo</option><option>Abarrotes</option>
+            <option>L&aacute;cteos</option><option>Bebidas</option>
+          </select>
+        </div>
+        <div class="full"><label>Nombre</label><input type="text" id="formNombre" placeholder="Nombre del producto"></div>
+        <div><label>Precio</label><input type="number" id="formPrecio" step="0.01" min="0" placeholder="0.00"></div>
+        <div><label>Stock</label><input type="number" id="formStock" step="0.001" min="0" value="0"></div>
+        <div class="full checkbox-group">
+          <input type="checkbox" id="formRequierePeso">
+          <label>Requiere peso (frutas/verduras)</label>
+        </div>
+      </div>
+      <div class="modal-buttons">
+        <button id="btnGuardar" class="btn btn-primary">Guardar</button>
+        <button id="btnCancelar" class="btn btn-secondary">Cancelar</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function loadJSON(k) { try { return JSON.parse(localStorage.getItem(k)) || []; } catch { return []; } }
+    function saveJSON(k, d) { localStorage.setItem(k, JSON.stringify(d)); }
+    function getProductos() { return loadJSON('pos_productos'); }
+    function setProductos(p) { saveJSON('pos_productos', p); }
+    function fmt(n) { return '$' + Number(n).toFixed(2); }
+
+    function cargarTabla(search) {
+      let lista = getProductos();
+      if (search) {
+        const q = search.toLowerCase();
+        lista = lista.filter(p => p.nombre.toLowerCase().includes(q) || (p.codigo && p.codigo.toLowerCase().includes(q)));
+      }
+      document.getElementById('invBody').innerHTML = lista.map(p => `
+        <tr>
+          <td data-label="Código">${p.codigo || '-'}</td>
+          <td data-label="Nombre"><strong>${p.nombre}</strong></td>
+          <td data-label="Categoría">${p.categoria || '-'}</td>
+          <td data-label="Precio">${fmt(p.precio)}</td>
+          <td data-label="Stock" class="${p.stock <= 5 ? 'stock-bajo' : ''}">${p.requiere_peso ? Number(p.stock).toFixed(3)+' kg' : Number(p.stock).toFixed(0)+' pz'}</td>
+          <td data-label="Tipo">${p.requiere_peso ? '<span class="badge">Por peso</span>' : 'Unidad'}</td>
+          <td data-label="" class="actions">
+            <button class="btn btn-secondary btn-sm" onclick="editar(${p.id})">Editar</button>
+            <button class="btn btn-danger btn-sm" onclick="eliminar(${p.id})">Eliminar</button>
+          </td>
+        </tr>
+      `).join('');
+    }
+
+    function abrirModal(p) {
+      document.getElementById('modalTitle').textContent = p ? 'Editar producto' : 'Nuevo producto';
+      document.getElementById('editId').value = p ? p.id : '';
+      document.getElementById('formCodigo').value = p ? (p.codigo || '') : '';
+      document.getElementById('formNombre').value = p ? p.nombre : '';
+      document.getElementById('formCategoria').value = p ? (p.categoria || '') : '';
+      document.getElementById('formPrecio').value = p ? p.precio : '';
+      document.getElementById('formStock').value = p ? p.stock : '0';
+      document.getElementById('formRequierePeso').checked = p ? !!p.requiere_peso : false;
+      document.getElementById('modalProducto').classList.remove('hidden');
+    }
+
+    function editar(id) {
+      const p = getProductos().find(x => x.id === id);
+      if (p) abrirModal(p);
+    }
+
+    function eliminar(id) {
+      if (!confirm('Eliminar este producto?')) return;
+      let prods = getProductos();
+      prods = prods.filter(p => p.id !== id);
+      setProductos(prods);
+      cargarTabla(document.getElementById('searchInv').value);
+    }
+
+    document.getElementById('btnNuevo').addEventListener('click', () => abrirModal(null));
+    document.getElementById('btnGuardar').addEventListener('click', () => {
+      const editId = document.getElementById('editId').value;
+      const data = {
+        codigo: document.getElementById('formCodigo').value || null,
+        nombre: document.getElementById('formNombre').value,
+        categoria: document.getElementById('formCategoria').value || null,
+        precio: parseFloat(document.getElementById('formPrecio').value),
+        requiere_peso: document.getElementById('formRequierePeso').checked,
+        stock: parseFloat(document.getElementById('formStock').value) || 0
+      };
+      if (!data.nombre || !data.precio || data.precio <= 0) { alert('Nombre y precio obligatorios'); return; }
+
+      let prods = getProductos();
+      if (editId) {
+        const idx = prods.findIndex(p => p.id === Number(editId));
+        if (idx >= 0) prods[idx] = { ...prods[idx], ...data };
+      } else {
+        data.id = prods.length > 0 ? Math.max(...prods.map(p => p.id)) + 1 : 1;
+        prods.push(data);
+      }
+      setProductos(prods);
+      document.getElementById('modalProducto').classList.add('hidden');
+      cargarTabla(document.getElementById('searchInv').value);
+    });
+
+    document.getElementById('btnCancelar').addEventListener('click', () => document.getElementById('modalProducto').classList.add('hidden'));
+    document.querySelector('.modal-close').addEventListener('click', () => document.getElementById('modalProducto').classList.add('hidden'));
+    document.getElementById('searchInv').addEventListener('input', e => cargarTabla(e.target.value));
+
+    cargarTabla();
+  </script>
+</body>
+</html>

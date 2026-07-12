@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Reportes - Recaudo</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-left"><h1>Reportes</h1></div>
+    <nav class="topbar-nav">
+      <a href="index.html">Cobro</a>
+      <a href="inventario.html">Inventario</a>
+      <a href="reportes.html" class="active">Reportes</a>
+    </nav>
+  </header>
+
+  <main class="page">
+    <div class="page-header"><h2>Ventas realizadas</h2></div>
+    <div class="filtros">
+      <div class="campo"><label>Desde</label><input type="date" id="filtroDesde"></div>
+      <div class="campo"><label>Hasta</label><input type="date" id="filtroHasta"></div>
+      <button id="btnFiltrar" class="btn btn-primary">Filtrar</button>
+      <button id="btnLimpiar" class="btn btn-secondary">Limpiar</button>
+    </div>
+    <div class="resumen">
+      <div class="resumen-card"><div class="label">Total ventas</div><div class="value" id="resumenTotal">$0.00</div></div>
+      <div class="resumen-card"><div class="label">Cantidad</div><div class="value" id="resumenCantidad">0</div></div>
+      <div class="resumen-card"><div class="label">Ticket promedio</div><div class="value" id="resumenPromedio">$0.00</div></div>
+    </div>
+    <table>
+      <thead><tr><th>Folio</th><th>Fecha</th><th>Productos</th><th>Total</th></tr></thead>
+      <tbody id="ventasBody"></tbody>
+    </table>
+  </main>
+
+  <script>
+    function loadJSON(k) { try { return JSON.parse(localStorage.getItem(k)) || []; } catch { return []; } }
+    function fmt(n) { return '$' + Number(n).toFixed(2); }
+
+    function setFechasDefault() {
+      const hoy = new Date();
+      const inicio = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+      document.getElementById('filtroDesde').value = inicio.toISOString().split('T')[0];
+      document.getElementById('filtroHasta').value = hoy.toISOString().split('T')[0];
+    }
+
+    function cargarVentas(desde, hasta) {
+      let ventas = loadJSON('pos_ventas');
+      if (desde && hasta) {
+        const d = new Date(desde);
+        const h = new Date(hasta + ' 23:59:59');
+        ventas = ventas.filter(v => { const vd = new Date(v.created_at); return vd >= d && vd <= h; });
+      }
+      ventas.reverse();
+      let total = 0;
+      document.getElementById('ventasBody').innerHTML = ventas.map(v => {
+        total += v.total;
+        const items = (v.items || []).map(i => i.producto_nombre + ' x' + i.cantidad).join(', ');
+        return `<tr><td data-label="Folio"><strong>#${String(v.folio).padStart(4,'0')}</strong></td><td data-label="Fecha">${v.created_at}</td><td data-label="Productos"><div class="detalle-items">${items || '—'}</div></td><td data-label="Total"><strong>${fmt(v.total)}</strong></td></tr>`;
+      }).join('');
+      document.getElementById('resumenTotal').textContent = fmt(total);
+      document.getElementById('resumenCantidad').textContent = ventas.length;
+      document.getElementById('resumenPromedio').textContent = ventas.length ? fmt(total / ventas.length) : '$0.00';
+    }
+
+    document.getElementById('btnFiltrar').addEventListener('click', () => {
+      const d = document.getElementById('filtroDesde').value;
+      const h = document.getElementById('filtroHasta').value;
+      if (!d || !h) { alert('Selecciona ambas fechas'); return; }
+      cargarVentas(d, h);
+    });
+    document.getElementById('btnLimpiar').addEventListener('click', () => { setFechasDefault(); cargarVentas(); });
+    setFechasDefault();
+    cargarVentas();
+  </script>
+</body>
+</html>
