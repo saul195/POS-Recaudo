@@ -54,7 +54,7 @@
           </select>
         </div>
         <div class="full"><label>Nombre</label><input type="text" id="formNombre" placeholder="Nombre del producto"></div>
-        <div><label>Precio</label><input type="number" id="formPrecio" step="0.01" min="0" placeholder="0.00"></div>
+        <div><label>Precio (Opcional)</label><input type="number" id="formPrecio" step="0.01" min="0" placeholder="0.00"></div>
         <div><label>Stock</label><input type="number" id="formStock" step="0.001" min="0" value="0"></div>
         <div class="full checkbox-group">
           <input type="checkbox" id="formRequierePeso">
@@ -129,13 +129,22 @@
         codigo: document.getElementById('formCodigo').value || null,
         nombre: document.getElementById('formNombre').value,
         categoria: document.getElementById('formCategoria').value || null,
-        precio: parseFloat(document.getElementById('formPrecio').value),
+        precio: parseFloat(document.getElementById('formPrecio').value) || 0,
         requiere_peso: document.getElementById('formRequierePeso').checked,
         stock: parseFloat(document.getElementById('formStock').value) || 0
       };
-      if (!data.nombre || !data.precio || data.precio <= 0) { alert('Nombre y precio obligatorios'); return; }
+      if (!data.nombre) { alert('El nombre es obligatorio'); return; }
 
       let prods = getProductos();
+      const nombreLower = data.nombre.trim().toLowerCase();
+      const duplicadoNombre = prods.find(p => p.nombre.trim().toLowerCase() === nombreLower && p.id !== Number(editId));
+      if (duplicadoNombre) { alert('Ya existe un producto con ese nombre'); return; }
+      if (data.codigo) {
+        const codigoLower = data.codigo.trim().toLowerCase();
+        const duplicadoCodigo = prods.find(p => p.codigo && p.codigo.trim().toLowerCase() === codigoLower && p.id !== Number(editId));
+        if (duplicadoCodigo) { alert('Ya existe un producto con ese código de barras'); return; }
+      }
+
       if (editId) {
         const idx = prods.findIndex(p => p.id === Number(editId));
         if (idx >= 0) prods[idx] = { ...prods[idx], ...data };
@@ -153,7 +162,7 @@
     document.getElementById('searchInv').addEventListener('input', e => cargarTabla(e.target.value));
 
     document.getElementById('btnExportar').addEventListener('click', () => {
-      const data = JSON.stringify(getProductos(), null, 2);
+      const data = JSON.stringify(getProductos().map(({id, ...rest}) => rest), null, 2);
       const blob = new Blob([data], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -175,7 +184,12 @@
         try {
           const data = JSON.parse(ev.target.result);
           if (!Array.isArray(data)) throw new Error('Formato inválido');
+          const nombres = data.map(p => (p.nombre || '').trim().toLowerCase()).filter(Boolean);
+          const nomDup = nombres.filter((n, i) => nombres.indexOf(n) !== i);
+          if (nomDup.length) throw new Error('Nombres duplicados en el archivo: ' + [...new Set(nomDup)].join(', '));
           if (!confirm('Importar ' + data.length + ' productos? Se reemplazará todo el inventario actual.')) return;
+          let maxId = 0;
+          data.forEach(p => { p.id = ++maxId; });
           setProductos(data);
           cargarTabla(document.getElementById('searchInv').value);
           alert('Inventario importado correctamente');
