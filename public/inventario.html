@@ -69,18 +69,13 @@
   </div>
 
   <script>
-    function loadJSON(k) { try { return JSON.parse(localStorage.getItem(k)) || []; } catch { return []; } }
-    function saveJSON(k, d) { localStorage.setItem(k, JSON.stringify(d)); }
-    function getProductos() { return loadJSON('pos_productos'); }
-    function setProductos(p) { saveJSON('pos_productos', p); }
+    const API = '';
     function fmt(n) { return '$' + Number(n).toFixed(2); }
 
-    function cargarTabla(search) {
-      let lista = getProductos();
-      if (search) {
-        const q = search.toLowerCase();
-        lista = lista.filter(p => p.nombre.toLowerCase().includes(q) || (p.codigo && p.codigo.toLowerCase().includes(q)));
-      }
+    async function cargarTabla(search) {
+      const q = search ? '?q=' + encodeURIComponent(search) : '';
+      const res = await fetch(API + '/api/productos' + q);
+      const lista = await res.json();
       document.getElementById('invBody').innerHTML = lista.map(p => `
         <tr>
           <td data-label="Código">${p.codigo || '-'}</td>
@@ -109,21 +104,22 @@
       document.getElementById('modalProducto').classList.remove('hidden');
     }
 
-    function editar(id) {
-      const p = getProductos().find(x => x.id === id);
+    async function editar(id) {
+      const res = await fetch(API + '/api/productos');
+      const prods = await res.json();
+      const p = prods.find(x => x.id === id);
       if (p) abrirModal(p);
     }
 
-    function eliminar(id) {
+    async function eliminar(id) {
       if (!confirm('Eliminar este producto?')) return;
-      let prods = getProductos();
-      prods = prods.filter(p => p.id !== id);
-      setProductos(prods);
+      await fetch(API + '/api/productos/' + id, { method: 'DELETE' });
       cargarTabla(document.getElementById('searchInv').value);
     }
 
     document.getElementById('btnNuevo').addEventListener('click', () => abrirModal(null));
-    document.getElementById('btnGuardar').addEventListener('click', () => {
+
+    document.getElementById('btnGuardar').addEventListener('click', async () => {
       const editId = document.getElementById('editId').value;
       const data = {
         codigo: document.getElementById('formCodigo').value || null,
@@ -135,24 +131,23 @@
       };
       if (!data.nombre) { alert('El nombre es obligatorio'); return; }
 
-      let prods = getProductos();
-      const nombreLower = data.nombre.trim().toLowerCase();
-      const duplicadoNombre = prods.find(p => p.nombre.trim().toLowerCase() === nombreLower && p.id !== Number(editId));
-      if (duplicadoNombre) { alert('Ya existe un producto con ese nombre'); return; }
-      if (data.codigo) {
-        const codigoLower = data.codigo.trim().toLowerCase();
-        const duplicadoCodigo = prods.find(p => p.codigo && p.codigo.trim().toLowerCase() === codigoLower && p.id !== Number(editId));
-        if (duplicadoCodigo) { alert('Ya existe un producto con ese código de barras'); return; }
-      }
-
+      let res;
       if (editId) {
-        const idx = prods.findIndex(p => p.id === Number(editId));
-        if (idx >= 0) prods[idx] = { ...prods[idx], ...data };
+        res = await fetch(API + '/api/productos/' + editId, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data)
+        });
       } else {
-        data.id = prods.length > 0 ? Math.max(...prods.map(p => p.id)) + 1 : 1;
-        prods.push(data);
+        res = await fetch(API + '/api/productos', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data)
+        });
       }
-      setProductos(prods);
+      const result = await res.json();
+      if (!res.ok) { alert(result.error || 'Error al guardar'); return; }
+
       document.getElementById('modalProducto').classList.add('hidden');
       cargarTabla(document.getElementById('searchInv').value);
     });
@@ -161,8 +156,10 @@
     document.querySelector('.modal-close').addEventListener('click', () => document.getElementById('modalProducto').classList.add('hidden'));
     document.getElementById('searchInv').addEventListener('input', e => cargarTabla(e.target.value));
 
-    document.getElementById('btnExportar').addEventListener('click', () => {
-      const data = JSON.stringify(getProductos().map(({id, ...rest}) => rest), null, 2);
+    document.getElementById('btnExportar').addEventListener('click', async () => {
+      const res = await fetch(API + '/api/productos');
+      const prods = await res.json();
+      const data = JSON.stringify(prods.map(({id, ...rest}) => rest), null, 2);
       const blob = new Blob([data], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -180,19 +177,23 @@
       const file = e.target.files[0];
       if (!file) return;
       const reader = new FileReader();
-      reader.onload = function(ev) {
+      reader.onload = async function(ev) {
         try {
           const data = JSON.parse(ev.target.result);
           if (!Array.isArray(data)) throw new Error('Formato inválido');
           const nombres = data.map(p => (p.nombre || '').trim().toLowerCase()).filter(Boolean);
           const nomDup = nombres.filter((n, i) => nombres.indexOf(n) !== i);
           if (nomDup.length) throw new Error('Nombres duplicados en el archivo: ' + [...new Set(nomDup)].join(', '));
-          if (!confirm('Importar ' + data.length + ' productos? Se reemplazará todo el inventario actual.')) return;
-          let maxId = 0;
-          data.forEach(p => { p.id = ++maxId; });
-          setProductos(data);
+          if (!confirm('Importar ' + data.length + ' productos? Se omitirán los duplicados.')) return;
+          const res = await fetch(API + '/api/productos/import', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+          });
+          const result = await res.json();
+          if (!res.ok) throw new Error(result.error);
           cargarTabla(document.getElementById('searchInv').value);
-          alert('Inventario importado correctamente');
+          alert('Importados: ' + result.imported + ' de ' + result.total + ' productos');
         } catch (err) {
           alert('Error al importar: ' + err.message);
         }

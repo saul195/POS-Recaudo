@@ -1,50 +1,13 @@
-const PRODUCTOS_DEFECTO = [
-  { id: 1, codigo: '7501', nombre: 'Manzana Roja', categoria: 'Frutas', precio: 29.50, requiere_peso: true, stock: 50 },
-  { id: 2, codigo: '7502', nombre: 'Plátano Tabasco', categoria: 'Frutas', precio: 18.00, requiere_peso: true, stock: 40 },
-  { id: 3, codigo: '7503', nombre: 'Naranja', categoria: 'Frutas', precio: 15.00, requiere_peso: true, stock: 60 },
-  { id: 4, codigo: '7504', nombre: 'Jitomate', categoria: 'Verduras', precio: 22.00, requiere_peso: true, stock: 30 },
-  { id: 5, codigo: '7505', nombre: 'Cebolla', categoria: 'Verduras', precio: 20.00, requiere_peso: true, stock: 35 },
-  { id: 6, codigo: '7506', nombre: 'Papa', categoria: 'Verduras', precio: 17.00, requiere_peso: true, stock: 45 },
-  { id: 7, codigo: '7610', nombre: 'Sabritas Original 50g', categoria: 'Sabritas', precio: 16.00, requiere_peso: false, stock: 100 },
-  { id: 8, codigo: '7611', nombre: 'Sabritas Adobadas 50g', categoria: 'Sabritas', precio: 16.00, requiere_peso: false, stock: 80 },
-  { id: 9, codigo: '7612', nombre: 'Chetos Torciditos 50g', categoria: 'Sabritas', precio: 15.00, requiere_peso: false, stock: 90 },
-  { id: 10, codigo: '7613', nombre: 'Ruffles Original 50g', categoria: 'Sabritas', precio: 16.00, requiere_peso: false, stock: 70 },
-  { id: 11, codigo: '7620', nombre: 'Emperador Chocolate', categoria: 'Gamesa', precio: 18.50, requiere_peso: false, stock: 60 },
-  { id: 12, codigo: '7621', nombre: 'Marias Gamesa 220g', categoria: 'Gamesa', precio: 22.00, requiere_peso: false, stock: 50 },
-  { id: 13, codigo: '7622', nombre: 'Chokis Chocolate', categoria: 'Gamesa', precio: 19.00, requiere_peso: false, stock: 55 },
-  { id: 14, codigo: '7630', nombre: 'Submarinos Bimbo 6pz', categoria: 'Bimbo', precio: 32.00, requiere_peso: false, stock: 40 },
-  { id: 15, codigo: '7631', nombre: 'Pan Blanco Bimbo 680g', categoria: 'Bimbo', precio: 38.00, requiere_peso: false, stock: 30 },
-  { id: 16, codigo: '7632', nombre: 'Donas Bimbo 4pz', categoria: 'Bimbo', precio: 28.00, requiere_peso: false, stock: 35 },
-  { id: 17, codigo: '7640', nombre: 'Coca-Cola 600ml', categoria: 'Bebidas', precio: 18.00, requiere_peso: false, stock: 120 },
-  { id: 18, codigo: '7641', nombre: 'Agua Natural 1L', categoria: 'Bebidas', precio: 12.00, requiere_peso: false, stock: 100 },
-  { id: 19, codigo: '7642', nombre: 'Boing Mango 500ml', categoria: 'Bebidas', precio: 14.00, requiere_peso: false, stock: 80 },
-  { id: 20, codigo: '7650', nombre: 'Leche Lala 1L', categoria: 'Lácteos', precio: 24.00, requiere_peso: false, stock: 50 }
-];
-
-function loadJSON(key) {
-  try { return JSON.parse(localStorage.getItem(key)) || []; } catch { return []; }
-}
-
-function saveJSON(key, data) {
-  localStorage.setItem(key, JSON.stringify(data));
-}
-
-function getProductos() {
-  return loadJSON('pos_productos');
-}
-
-function setProductos(p) { saveJSON('pos_productos', p); }
-
-function getVentas() { return loadJSON('pos_ventas'); }
-function setVentas(v) { saveJSON('pos_ventas', v); }
+const API = '';
 
 function fmt(n) { return '$' + Number(n).toFixed(2); }
 
 let productos = [];
 let ticket = [];
 
-function cargarProductos() {
-  productos = getProductos();
+async function cargarProductos() {
+  const res = await fetch(API + '/api/productos');
+  productos = await res.json();
   renderProductos(productos);
 }
 
@@ -103,14 +66,9 @@ function cambiarCantidadTicket(i, val) {
   const n = parseFloat(val);
   if (isNaN(n) || n < 0) return;
   const item = ticket[i];
-  const stock = obtenerStockTicket(item);
   item.cantidad = n;
   if (item.peso) item.peso = n;
-  if (n > stock && stock > 0) {
-    actualizarTicket();
-  } else if (n <= stock) {
-    actualizarTicket();
-  }
+  actualizarTicket();
 }
 
 function agregarTicket(id) {
@@ -200,7 +158,7 @@ function imprimirTicket(venta) {
   win.document.close();
 }
 
-function cobrar() {
+async function cobrar() {
   const items = ticket.map(item => ({
     producto_id: item.id,
     producto_nombre: item.nombre,
@@ -215,37 +173,32 @@ function cobrar() {
   });
   if (sinPeso.length) { alert('Hay productos por peso sin asignar'); return; }
 
-  const ventas = getVentas();
-  const prods = getProductos();
-  const folio = ventas.length > 0 ? Math.max(...ventas.map(v => v.folio)) + 1 : 1;
-  let total = 0;
-
   for (const item of items) {
-    const prod = prods.find(p => p.id === item.producto_id);
+    const prod = productos.find(p => p.id === item.producto_id);
     if (prod && item.cantidad > prod.stock) {
       alert('Stock insuficiente para ' + prod.nombre + '. Disponible: ' + prod.stock.toFixed(3));
       return;
     }
-    item.subtotal = item.cantidad * item.precio_unitario;
-    total += item.subtotal;
-    if (prod) prod.stock = Math.max(0, prod.stock - item.cantidad);
   }
-  setProductos(prods);
 
-  const venta = {
-    id: ventas.length > 0 ? Math.max(...ventas.map(v => v.id)) + 1 : 1,
-    folio, total, items,
-    created_at: new Date().toLocaleString('es-MX')
-  };
-  ventas.push(venta);
-  setVentas(ventas);
+  try {
+    const res = await fetch(API + '/api/ventas', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ items })
+    });
+    const data = await res.json();
+    if (!res.ok) { alert(data.error || 'Error al registrar venta'); return; }
 
-  imprimirTicket(venta);
+    imprimirTicket(data);
 
-  ticket = [];
-  actualizarTicket();
-  cargarProductos();
-  document.getElementById('folioDisplay').textContent = String(folio + 1).padStart(3, '0');
+    ticket = [];
+    actualizarTicket();
+    await cargarProductos();
+    document.getElementById('folioDisplay').textContent = String(data.folio + 1).padStart(3, '0');
+  } catch (e) {
+    alert('Error de conexión: ' + e.message);
+  }
 }
 
 document.getElementById('btnCobrar').addEventListener('click', cobrar);
@@ -281,7 +234,11 @@ document.addEventListener('keydown', e => {
   if (e.key === 'F9') { e.preventDefault(); ticket = []; actualizarTicket(); }
 });
 
-const ventas = getVentas();
-const folio = ventas.length > 0 ? Math.max(...ventas.map(v => v.folio)) + 1 : 1;
-document.getElementById('folioDisplay').textContent = String(folio).padStart(3, '0');
-cargarProductos();
+async function init() {
+  const res = await fetch(API + '/api/ventas/folio');
+  const data = await res.json();
+  document.getElementById('folioDisplay').textContent = String(data.folio).padStart(3, '0');
+  await cargarProductos();
+}
+
+init();

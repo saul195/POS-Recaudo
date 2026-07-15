@@ -36,7 +36,7 @@
   </main>
 
   <script>
-    function loadJSON(k) { try { return JSON.parse(localStorage.getItem(k)) || []; } catch { return []; } }
+    const API = '';
     function fmt(n) { return '$' + Number(n).toFixed(2); }
 
     function setFechasDefault() {
@@ -46,13 +46,11 @@
       document.getElementById('filtroHasta').value = hoy.toISOString().split('T')[0];
     }
 
-    function cargarVentas(desde, hasta) {
-      let ventas = loadJSON('pos_ventas');
-      if (desde && hasta) {
-        const d = new Date(desde);
-        const h = new Date(hasta + ' 23:59:59');
-        ventas = ventas.filter(v => { const vd = new Date(v.created_at); return vd >= d && vd <= h; });
-      }
+    async function cargarVentas(desde, hasta) {
+      let url = API + '/api/ventas';
+      if (desde && hasta) url += '?desde=' + encodeURIComponent(desde) + '&hasta=' + encodeURIComponent(hasta);
+      const res = await fetch(url);
+      let ventas = await res.json();
       ventas.reverse();
       let total = 0;
       document.getElementById('ventasBody').innerHTML = ventas.map(v => {

@@ -1,0 +1,12 @@
+{
+  "name": "pos-recaudo",
+  "version": "2.0.0",
+  "description": "POS Recaudo - Sistema de punto de venta",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "sql.js": "^1.11.0"
+  }
+}
