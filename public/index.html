@@ -57,6 +57,40 @@
     </div>
   </div>
 
+  <div id="barcodeModal" class="modal hidden">
+    <div class="modal-content barcode-modal">
+      <span class="modal-close" onclick="cerrarBarcodeModal()">&times;</span>
+      <div id="barcodeNotFound">
+        <h3>Código no encontrado</h3>
+        <p class="barcode-codigo">Código: <strong id="barcodeScanned"></strong></p>
+        <div class="modal-buttons">
+          <button class="btn btn-secondary" onclick="cerrarBarcodeModal()">Buscar manualmente</button>
+          <button class="btn btn-primary" onclick="mostrarFormRapido()">Agregar producto</button>
+        </div>
+      </div>
+      <div id="barcodeFormRapido" class="hidden">
+        <h3>Agregar producto rápido</h3>
+        <p class="barcode-codigo">Código: <strong id="barcodeFormCodigo"></strong></p>
+        <div class="form-grid">
+          <div class="full"><label>Nombre *</label><input type="text" id="bcNombre" required></div>
+          <div><label>Categoría</label><input type="text" id="bcCategoria"></div>
+          <div><label>Precio *</label><input type="number" id="bcPrecio" step="0.01" min="0" required></div>
+          <div><label>Stock *</label><input type="number" id="bcStock" step="0.001" min="0" required></div>
+          <div class="checkbox-group full">
+            <input type="checkbox" id="bcPeso">
+            <label for="bcPeso">Se vende por peso</label>
+          </div>
+        </div>
+        <div class="modal-buttons">
+          <button class="btn btn-secondary" onclick="cerrarBarcodeModal()">Cancelar</button>
+          <button class="btn btn-primary" onclick="agregarProductoRapido()">Guardar y agregar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="barcodeToast" class="barcode-toast hidden"></div>
+
   <script src="app.js"></script>
 </body>
 </html>

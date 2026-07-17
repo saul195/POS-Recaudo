@@ -114,6 +114,9 @@ function cerrarPesoModal() {
     actualizarTicket();
   }
   pesoEditIndex = -1;
+  searchInput.value = '';
+  searchResults.classList.remove('visible');
+  renderProductos(productos);
 }
 
 document.getElementById('btnPesoConfirmar').addEventListener('click', () => {
@@ -136,6 +139,84 @@ document.querySelector('.modal-close').addEventListener('click', cerrarPesoModal
 document.getElementById('pesoInput').addEventListener('keydown', e => {
   if (e.key === 'Enter') document.getElementById('btnPesoConfirmar').click();
   if (e.key === 'Escape') cerrarPesoModal();
+});
+
+let barcodeScanBuffer = '';
+let barcodeScanTimer = null;
+
+function buscarCodigoExacto(codigo) {
+  const c = codigo.trim().toLowerCase();
+  return productos.find(p => p.codigo && p.codigo.trim().toLowerCase() === c) || null;
+}
+
+function mostrarBarcodeToast(mensaje) {
+  const toast = document.getElementById('barcodeToast');
+  toast.textContent = mensaje;
+  toast.classList.remove('hidden');
+  setTimeout(() => toast.classList.add('hidden'), 2500);
+}
+
+let barcodeScannedCode = '';
+
+function abrirBarcodeModal(codigo) {
+  barcodeScannedCode = codigo;
+  document.getElementById('barcodeScanned').textContent = codigo;
+  document.getElementById('barcodeFormCodigo').textContent = codigo;
+  document.getElementById('barcodeNotFound').classList.remove('hidden');
+  document.getElementById('barcodeFormRapido').classList.add('hidden');
+  document.getElementById('bcNombre').value = '';
+  document.getElementById('bcCategoria').value = '';
+  document.getElementById('bcPrecio').value = '';
+  document.getElementById('bcStock').value = '';
+  document.getElementById('bcPeso').checked = false;
+  document.getElementById('barcodeModal').classList.remove('hidden');
+}
+
+function cerrarBarcodeModal() {
+  document.getElementById('barcodeModal').classList.add('hidden');
+  barcodeScannedCode = '';
+  searchInput.value = '';
+  searchResults.classList.remove('visible');
+  renderProductos(productos);
+}
+
+function mostrarFormRapido() {
+  document.getElementById('barcodeNotFound').classList.add('hidden');
+  document.getElementById('barcodeFormRapido').classList.remove('hidden');
+  document.getElementById('bcNombre').focus();
+}
+
+async function agregarProductoRapido() {
+  const nombre = document.getElementById('bcNombre').value.trim();
+  const categoria = document.getElementById('bcCategoria').value.trim() || null;
+  const precio = parseFloat(document.getElementById('bcPrecio').value);
+  const stock = parseFloat(document.getElementById('bcStock').value);
+  const requiere_peso = document.getElementById('bcPeso').checked ? 1 : 0;
+
+  if (!nombre) { alert('Ingresa el nombre del producto'); return; }
+  if (isNaN(precio) || precio < 0) { alert('Ingresa un precio válido'); return; }
+  if (isNaN(stock) || stock < 0) { alert('Ingresa el stock válido'); return; }
+
+  try {
+    const res = await fetch(API + '/api/productos', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ codigo: barcodeScannedCode, nombre, categoria, precio, stock, requiere_peso })
+    });
+    const data = await res.json();
+    if (!res.ok) { alert(data.error || 'Error al crear producto'); return; }
+
+    await cargarProductos();
+    agregarTicket(data.id);
+    mostrarBarcodeToast('Agregado: ' + nombre);
+    cerrarBarcodeModal();
+  } catch (e) {
+    alert('Error de conexión: ' + e.message);
+  }
+}
+
+document.getElementById('barcodeModal').addEventListener('click', e => {
+  if (e.target === document.getElementById('barcodeModal')) cerrarBarcodeModal();
 });
 
 function imprimirTicket(venta) {
@@ -224,7 +305,21 @@ searchInput.addEventListener('input', () => {
 });
 
 searchInput.addEventListener('keydown', e => {
-  if (e.key === 'Enter') { e.preventDefault(); const f = searchResults.querySelector('.search-result-item'); if (f) f.click(); }
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    const valor = searchInput.value.trim();
+    if (!valor) return;
+    const encontrado = buscarCodigoExacto(valor);
+    if (encontrado) {
+      agregarTicket(encontrado.id);
+      mostrarBarcodeToast('Agregado: ' + encontrado.nombre);
+      searchInput.value = '';
+      searchResults.classList.remove('visible');
+      renderProductos(productos);
+    } else {
+      abrirBarcodeModal(valor);
+    }
+  }
   if (e.key === 'Escape') searchResults.classList.remove('visible');
 });
 

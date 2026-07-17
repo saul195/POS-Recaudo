@@ -99,6 +99,18 @@ tr:hover td { background: #f0faf4; }
 .resumen-card .value { font-size: 1.6rem; font-weight: 700; color: var(--primary); margin-top: 4px; }
 .detalle-items { font-size: 0.85rem; color: var(--text-light); }
 .folio { font-size: 1rem; }
+.barcode-modal { max-width: 420px; }
+.barcode-codigo { background: #f8f9fa; padding: 8px 12px; border-radius: var(--radius); font-size: 0.9rem; margin-bottom: 16px; word-break: break-all; }
+.barcode-toast { position: fixed; top: 20px; right: 20px; background: var(--primary); color: white; padding: 12px 20px; border-radius: var(--radius); font-weight: 500; box-shadow: 0 4px 12px rgba(0,0,0,0.25); z-index: 2000; transition: opacity 0.3s; }
+.barcode-toast.hidden { display: none; }
+.lista-productos-asignar { max-height: 250px; overflow-y: auto; border: 1px solid var(--border); border-radius: var(--radius); }
+.lista-productos-asignar .item-asignar { padding: 10px 12px; cursor: pointer; border-bottom: 1px solid var(--border); transition: background 0.15s; display: flex; justify-content: space-between; align-items: center; }
+.lista-productos-asignar .item-asignar:last-child { border-bottom: none; }
+.lista-productos-asignar .item-asignar:hover { background: #e8f5e9; }
+.lista-productos-asignar .item-asignar .nombre { font-weight: 500; }
+.lista-productos-asignar .item-asignar .codigo-actual { font-size: 0.8rem; color: var(--text-light); }
+.lista-productos-asignar .item-asignar .precio { color: var(--primary); font-weight: 600; font-size: 0.9rem; }
+.lista-productos-asignar .sin-resultados { padding: 16px; text-align: center; color: var(--text-light); }
 
 @media (max-width: 1024px) {
   .pos-layout { grid-template-columns: 1fr 340px; gap: 12px; }

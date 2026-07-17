@@ -68,6 +68,22 @@
     </div>
   </div>
 
+  <div id="asignarCodigoModal" class="modal hidden">
+    <div class="modal-content barcode-modal">
+      <span class="modal-close" onclick="cerrarAsignarModal()">&times;</span>
+      <h3>Código no registrado</h3>
+      <p class="barcode-codigo">Código escaneado: <strong id="codigoEscaneado"></strong></p>
+      <p style="margin-bottom:12px;font-size:0.9rem;color:var(--text-light)">Selecciona el producto al que deseas asignar este código:</p>
+      <input type="text" id="buscarProductoAsignar" placeholder="Buscar producto..." style="width:100%;padding:10px 12px;border:2px solid var(--border);border-radius:var(--radius);font-size:0.95rem;margin-bottom:12px">
+      <div id="listaProductosAsignar" class="lista-productos-asignar"></div>
+      <div class="modal-buttons" style="margin-top:12px">
+        <button class="btn btn-secondary" onclick="cerrarAsignarModal()">Cancelar</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="barcodeToastInv" class="barcode-toast hidden"></div>
+
   <script>
     const API = '';
     function fmt(n) { return '$' + Number(n).toFixed(2); }
@@ -149,12 +165,113 @@
       if (!res.ok) { alert(result.error || 'Error al guardar'); return; }
 
       document.getElementById('modalProducto').classList.add('hidden');
-      cargarTabla(document.getElementById('searchInv').value);
+      document.getElementById('searchInv').value = '';
+      await cargarProductosCache();
+      cargarTabla();
     });
 
-    document.getElementById('btnCancelar').addEventListener('click', () => document.getElementById('modalProducto').classList.add('hidden'));
-    document.querySelector('.modal-close').addEventListener('click', () => document.getElementById('modalProducto').classList.add('hidden'));
+    document.getElementById('btnCancelar').addEventListener('click', () => {
+      document.getElementById('modalProducto').classList.add('hidden');
+      document.getElementById('searchInv').value = '';
+      cargarTabla();
+    });
+    document.querySelector('.modal-close').addEventListener('click', () => {
+      document.getElementById('modalProducto').classList.add('hidden');
+      document.getElementById('searchInv').value = '';
+      cargarTabla();
+    });
     document.getElementById('searchInv').addEventListener('input', e => cargarTabla(e.target.value));
+
+    let productosCache = [];
+
+    async function cargarProductosCache() {
+      const res = await fetch(API + '/api/productos');
+      productosCache = await res.json();
+    }
+
+    function buscarCodigoExacto(codigo) {
+      const c = codigo.trim().toLowerCase();
+      return productosCache.find(p => p.codigo && p.codigo.trim().toLowerCase() === c) || null;
+    }
+
+    function showToastInv(mensaje) {
+      const toast = document.getElementById('barcodeToastInv');
+      toast.textContent = mensaje;
+      toast.classList.remove('hidden');
+      setTimeout(() => toast.classList.add('hidden'), 2500);
+    }
+
+    let codigoEscaneadoActual = '';
+
+    function abrirAsignarModal(codigo) {
+      codigoEscaneadoActual = codigo;
+      document.getElementById('codigoEscaneado').textContent = codigo;
+      document.getElementById('buscarProductoAsignar').value = '';
+      document.getElementById('asignarCodigoModal').classList.remove('hidden');
+      renderListaAsignar('');
+      document.getElementById('buscarProductoAsignar').focus();
+    }
+
+    function cerrarAsignarModal() {
+      document.getElementById('asignarCodigoModal').classList.add('hidden');
+      document.getElementById('searchInv').value = '';
+      cargarTabla();
+      codigoEscaneadoActual = '';
+    }
+
+    function renderListaAsignar(filtro) {
+      const q = filtro.trim().toLowerCase();
+      const filtrados = q
+        ? productosCache.filter(p => p.nombre.toLowerCase().includes(q) || (p.codigo && p.codigo.toLowerCase().includes(q)))
+        : productosCache;
+      const c = document.getElementById('listaProductosAsignar');
+      if (!filtrados.length) {
+        c.innerHTML = '<div class="sin-resultados">No se encontraron productos</div>';
+        return;
+      }
+      c.innerHTML = filtrados.map(p => `
+        <div class="item-asignar" onclick="asignarCodigoAProducto(${p.id})">
+          <div>
+            <div class="nombre">${p.nombre}</div>
+            ${p.codigo ? '<div class="codigo-actual">Código actual: ' + p.codigo + '</div>' : '<div class="codigo-actual">Sin código</div>'}
+          </div>
+          <div class="precio">${fmt(p.precio)}</div>
+        </div>
+      `).join('');
+    }
+
+    async function asignarCodigoAProducto(id) {
+      const prod = productosCache.find(p => p.id === id);
+      if (!prod) return;
+      document.getElementById('asignarCodigoModal').classList.add('hidden');
+      abrirModal(prod);
+      document.getElementById('formCodigo').value = codigoEscaneadoActual;
+      codigoEscaneadoActual = '';
+    }
+
+    document.getElementById('buscarProductoAsignar').addEventListener('input', e => renderListaAsignar(e.target.value));
+    document.getElementById('buscarProductoAsignar').addEventListener('keydown', e => {
+      if (e.key === 'Escape') cerrarAsignarModal();
+    });
+    document.getElementById('asignarCodigoModal').addEventListener('click', e => {
+      if (e.target === document.getElementById('asignarCodigoModal')) cerrarAsignarModal();
+    });
+
+    document.getElementById('searchInv').addEventListener('keydown', e => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        const valor = document.getElementById('searchInv').value.trim();
+        if (!valor) return;
+        const encontrado = buscarCodigoExacto(valor);
+        if (encontrado) {
+          document.getElementById('searchInv').value = '';
+          editar(encontrado.id);
+          showToastInv('Producto encontrado: ' + encontrado.nombre);
+        } else {
+          abrirAsignarModal(valor);
+        }
+      }
+    });
 
     document.getElementById('btnExportar').addEventListener('click', async () => {
       const res = await fetch(API + '/api/productos');
@@ -202,6 +319,7 @@
       e.target.value = '';
     });
 
+    cargarProductosCache();
     cargarTabla();
   </script>
 </body>
