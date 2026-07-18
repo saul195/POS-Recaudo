@@ -18,7 +18,7 @@
 
   <main class="page">
     <div class="page-header">
-      <h2>Productos</h2>
+      <h2>Productos <span id="codigoIndicator" style="font-size:0.8rem;font-weight:normal;color:var(--text-light);margin-left:8px"></span></h2>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button id="btnNuevo" class="btn btn-primary">+ Nuevo producto</button>
         <button id="btnExportar" class="btn btn-secondary">Exportar</button>
@@ -28,6 +28,11 @@
     <input type="file" id="fileInput" accept=".json" style="display:none">
     <div class="search-bar">
       <input type="text" id="searchInv" placeholder="Buscar producto...">
+      <select id="filterCodigo" style="padding:8px 12px;border:2px solid var(--border);border-radius:var(--radius);font-size:0.9rem;background:var(--surface)">
+        <option value="todos">Todos</option>
+        <option value="sin-codigo">Sin código</option>
+        <option value="con-codigo">Con código</option>
+      </select>
     </div>
     <table>
       <thead>
@@ -92,7 +97,14 @@
       const q = search ? '?q=' + encodeURIComponent(search) : '';
       const res = await fetch(API + '/api/productos' + q);
       const lista = await res.json();
-      document.getElementById('invBody').innerHTML = lista.map(p => `
+      const filtro = document.getElementById('filterCodigo').value;
+      let filtrados = lista;
+      if (filtro === 'sin-codigo') filtrados = lista.filter(p => !p.codigo);
+      if (filtro === 'con-codigo') filtrados = lista.filter(p => p.codigo);
+      const total = lista.length;
+      const conCodigo = lista.filter(p => p.codigo).length;
+      document.getElementById('codigoIndicator').textContent = conCodigo + '/' + total + ' con código';
+      document.getElementById('invBody').innerHTML = filtrados.map(p => `
         <tr>
           <td data-label="Código">${p.codigo || '-'}</td>
           <td data-label="Nombre"><strong>${p.nombre}</strong></td>
@@ -181,6 +193,7 @@
       cargarTabla();
     });
     document.getElementById('searchInv').addEventListener('input', e => cargarTabla(e.target.value));
+    document.getElementById('filterCodigo').addEventListener('change', e => cargarTabla(document.getElementById('searchInv').value));
 
     let productosCache = [];
 
