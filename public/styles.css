@@ -111,6 +111,17 @@ tr:hover td { background: #f0faf4; }
 .lista-productos-asignar .item-asignar .codigo-actual { font-size: 0.8rem; color: var(--text-light); }
 .lista-productos-asignar .item-asignar .precio { color: var(--primary); font-weight: 600; font-size: 0.9rem; }
 .lista-productos-asignar .sin-resultados { padding: 16px; text-align: center; color: var(--text-light); }
+.printer-indicator { display: flex; align-items: center; gap: 6px; padding: 4px 12px; background: rgba(255,255,255,0.1); border-radius: 20px; cursor: pointer; transition: background 0.2s; font-size: 0.8rem; }
+.printer-indicator:hover { background: rgba(255,255,255,0.2); }
+.printer-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.printer-dot.active { background: #4caf50; box-shadow: 0 0 6px #4caf50; }
+.printer-dot.inactive { background: #f44336; }
+.printer-dot.configured { background: #ffb703; box-shadow: 0 0 6px #ffb703; }
+.printer-status-box { background: #f8f9fa; border: 1px solid var(--border); border-radius: var(--radius); padding: 12px; margin-top: 12px; font-size: 0.9rem; }
+
+.tooltip-btn { position: relative; }
+.tooltip-btn:hover::after { content: attr(data-tooltip); position: absolute; bottom: calc(100% + 8px); left: 50%; transform: translateX(-50%); background: #1a1a2e; color: white; padding: 8px 12px; border-radius: 6px; font-size: 0.8rem; font-weight: 400; white-space: nowrap; z-index: 200; pointer-events: none; box-shadow: 0 2px 8px rgba(0,0,0,0.2); }
+.tooltip-btn:hover::before { content: ''; position: absolute; bottom: calc(100% + 2px); left: 50%; transform: translateX(-50%); border: 6px solid transparent; border-top-color: #1a1a2e; z-index: 200; pointer-events: none; }
 
 @media (max-width: 1024px) {
   .pos-layout { grid-template-columns: 1fr 340px; gap: 12px; }
@@ -148,6 +159,7 @@ tr:hover td { background: #f0faf4; }
   .modal-content { min-width: auto; width: 92vw; max-width: 92vw; margin: 0 10px; padding: 16px; }
   .modal-content input:not([type=checkbox]), .modal-content select { font-size: 16px; }
   .folio { font-size: 0.9rem; }
+  .printer-indicator { font-size: 0.7rem; padding: 3px 8px; }
 }
 @media (max-width: 480px) {
   .product-grid { grid-template-columns: repeat(auto-fill, minmax(90px, 1fr)); gap: 5px; }
@@ -164,4 +176,12 @@ tr:hover td { background: #f0faf4; }
   .topbar-nav a { font-size: 0.8rem; padding: 5px 8px; }
   .cant-input { width: 50px; font-size: 0.85rem; }
 }
+
+.productos-sin-barcode { max-height: 300px; overflow-y: auto; }
+.producto-sin-bc { display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: 8px; cursor: pointer; transition: all 0.15s; }
+.producto-sin-bc:hover { border-color: var(--primary); background: rgba(45,106,79,0.05); }
+.producto-sin-bc .psb-nombre { font-weight: 600; font-size: 0.95rem; }
+.producto-sin-bc .psb-info { font-size: 0.8rem; color: var(--text-light); }
+.producto-sin-bc .psb-btn { background: var(--primary); color: white; border: none; padding: 6px 14px; border-radius: var(--radius); cursor: pointer; font-size: 0.85rem; font-weight: 600; }
+.producto-sin-bc .psb-btn:hover { background: var(--primary-dark); }
 

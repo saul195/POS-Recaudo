@@ -80,7 +80,7 @@ function agregarTicket(id) {
     ticket.push({ id: p.id, nombre: p.nombre, precio: p.precio, cantidad: 0, peso: null });
     abrirPesoModal(ticket.length - 1);
   } else {
-    if (p.stock <= 0) { alert('Sin stock disponible'); return; }
+    if (p.stock <= 0) { abrirStockModal(p); return; }
     const exist = ticket.findIndex(x => x.id === p.id);
     if (exist >= 0) {
       const enTicket = ticket[exist].cantidad;
@@ -219,24 +219,100 @@ document.getElementById('barcodeModal').addEventListener('click', e => {
   if (e.target === document.getElementById('barcodeModal')) cerrarBarcodeModal();
 });
 
-function imprimirTicket(venta) {
-  const itemsHtml = (venta.items || []).map(d => {
-    const detalle = d.peso
-      ? `${d.cantidad.toFixed(3)} kg x $${d.precio_unitario.toFixed(2)}`
-      : `${d.cantidad.toFixed(0)} x $${d.precio_unitario.toFixed(2)}`;
-    return `<tr><td>${d.producto_nombre}</td><td style="text-align:right">${detalle}</td><td style="text-align:right">$${d.subtotal.toFixed(2)}</td></tr>`;
-  }).join('');
+let cobroVentaPendiente = null;
 
-  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Ticket #${String(venta.folio).padStart(4,'0')}</title>
-<style>body{font-family:'Courier New',monospace;font-size:12px;width:80mm;margin:0;padding:5mm;}table{width:100%;border-collapse:collapse;}td,th{padding:2px 0;}.header{text-align:center;font-weight:bold;margin-bottom:10px;font-size:14px;}.linea{border-top:1px dashed #000;margin:6px 0;}.total{font-weight:bold;font-size:16px;text-align:right;}.footer{text-align:center;margin-top:10px;font-size:10px;}</style></head>
-<body><div class="header">RECAUDO<br>${venta.created_at}<br>FOLIO: #${String(venta.folio).padStart(4,'0')}</div>
-<div class="linea"></div><table><tr><th style="text-align:left">Producto</th><th style="text-align:right">Cant</th><th style="text-align:right">Subtotal</th></tr>${itemsHtml}</table>
-<div class="linea"></div><div class="total">TOTAL: $${venta.total.toFixed(2)}</div>
-<div class="footer">Gracias por su compra</div>
-<script>window.print();window.close();<\/script></body></html>`;
-  const win = window.open('', '_blank', 'width=300,height=600');
-  win.document.write(html);
-  win.document.close();
+function abrirCobroModal(total, items) {
+  cobroVentaPendiente = { total, items };
+  document.getElementById('cobroTotalDisplay').textContent = fmt(total);
+  document.getElementById('cobroRecibido').value = '';
+  document.getElementById('cobroCambioDisplay').textContent = '$0.00';
+  document.getElementById('cobroError').style.display = 'none';
+  document.getElementById('cobroModal').classList.remove('hidden');
+  setTimeout(() => document.getElementById('cobroRecibido').focus(), 100);
+}
+
+function cerrarCobroModal() {
+  document.getElementById('cobroModal').classList.add('hidden');
+  cobroVentaPendiente = null;
+}
+
+function calcularCambio() {
+  if (!cobroVentaPendiente) return;
+  const recibido = parseFloat(document.getElementById('cobroRecibido').value) || 0;
+  const total = cobroVentaPendiente.total;
+  const cambio = recibido - total;
+  document.getElementById('cobroCambioDisplay').textContent = fmt(Math.max(0, cambio));
+  document.getElementById('cobroError').style.display = recibido < total && recibido > 0 ? 'block' : 'none';
+  document.getElementById('btnCobroConfirmar').disabled = recibido < total;
+}
+
+document.getElementById('cobroRecibido').addEventListener('input', calcularCambio);
+document.getElementById('cobroRecibido').addEventListener('keydown', e => {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    if (!document.getElementById('btnCobroConfirmar').disabled) confirmarCobro();
+  }
+  if (e.key === 'Escape') cerrarCobroModal();
+});
+document.getElementById('btnCobroConfirmar').addEventListener('click', confirmarCobro);
+document.getElementById('btnCobroCancelar').addEventListener('click', cerrarCobroModal);
+
+async function confirmarCobro() {
+  if (!cobroVentaPendiente) return;
+  const recibido = parseFloat(document.getElementById('cobroRecibido').value) || 0;
+  if (recibido < cobroVentaPendiente.total) return;
+
+  const config = JSON.parse(localStorage.getItem('printerConfig') || 'null');
+  const cambio = recibido - cobroVentaPendiente.total;
+  const items = cobroVentaPendiente.items;
+  const total = cobroVentaPendiente.total;
+
+  cerrarCobroModal();
+
+  try {
+    const res = await fetch(API + '/api/ventas', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ items })
+    });
+    const data = await res.json();
+    if (!res.ok) { alert(data.error || 'Error al registrar venta'); return; }
+
+    if (config && config.nombre) {
+      try {
+        const printRes = await fetch(API + '/api/imprimir', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            printerName: config.nombre,
+            printerConnection: config.conexion,
+            printerIP: config.ip,
+            folio: data.folio,
+            fecha: data.created_at,
+            items: data.items,
+            total: data.total,
+            recibido,
+            cambio
+          })
+        });
+        if (!printRes.ok) {
+          const err = await printRes.json();
+          alert('Venta registrada. Error al imprimir: ' + (err.error || 'Error desconocido'));
+        }
+      } catch (e) {
+        alert('Venta registrada. Error de impresion: ' + e.message);
+      }
+    } else {
+      alert('Venta registrada. No hay impresora configurada.');
+    }
+
+    ticket = [];
+    actualizarTicket();
+    await cargarProductos();
+    document.getElementById('folioDisplay').textContent = String(data.folio + 1).padStart(3, '0');
+  } catch (e) {
+    alert('Error de conexion: ' + e.message);
+  }
 }
 
 async function cobrar() {
@@ -262,24 +338,8 @@ async function cobrar() {
     }
   }
 
-  try {
-    const res = await fetch(API + '/api/ventas', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ items })
-    });
-    const data = await res.json();
-    if (!res.ok) { alert(data.error || 'Error al registrar venta'); return; }
-
-    imprimirTicket(data);
-
-    ticket = [];
-    actualizarTicket();
-    await cargarProductos();
-    document.getElementById('folioDisplay').textContent = String(data.folio + 1).padStart(3, '0');
-  } catch (e) {
-    alert('Error de conexión: ' + e.message);
-  }
+  const total = items.reduce((sum, i) => sum + i.cantidad * i.precio_unitario, 0);
+  abrirCobroModal(total, items);
 }
 
 document.getElementById('btnCobrar').addEventListener('click', cobrar);
@@ -334,6 +394,238 @@ async function init() {
   const data = await res.json();
   document.getElementById('folioDisplay').textContent = String(data.folio).padStart(3, '0');
   await cargarProductos();
+  cargarConfigPrinter();
 }
 
 init();
+
+function cargarConfigPrinter() {
+  const config = JSON.parse(localStorage.getItem('printerConfig') || 'null');
+  const dot = document.getElementById('printerDot');
+  const nameEl = document.getElementById('printerName');
+  if (config && config.nombre) {
+    nameEl.textContent = config.nombre;
+    dot.className = 'printer-dot active';
+  } else {
+    nameEl.textContent = 'Sin impresora';
+    dot.className = 'printer-dot inactive';
+  }
+}
+
+function abrirConfigPrinter() {
+  const config = JSON.parse(localStorage.getItem('printerConfig') || 'null');
+  if (config) {
+    document.getElementById('printerNameInput').value = config.nombre || '';
+    document.getElementById('printerConnection').value = config.conexion || 'usb';
+    document.getElementById('printerPaper').value = config.papel || '80';
+    document.getElementById('printerIp').value = config.ip || '';
+  }
+  toggleIpField();
+  actualizarEstadoPrinter();
+  document.getElementById('printerModal').classList.remove('hidden');
+}
+
+function cerrarConfigPrinter() {
+  document.getElementById('printerModal').classList.add('hidden');
+}
+
+function toggleIpField() {
+  const conn = document.getElementById('printerConnection').value;
+  document.getElementById('printerIpField').style.display = conn === 'red' ? 'block' : 'none';
+}
+
+document.getElementById('printerConnection').addEventListener('change', toggleIpField);
+
+function guardarConfigPrinter() {
+  const nombre = document.getElementById('printerNameInput').value.trim();
+  const conexion = document.getElementById('printerConnection').value;
+  const papel = document.getElementById('printerPaper').value;
+  const ip = document.getElementById('printerIp').value.trim();
+  if (!nombre) { alert('Ingresa el nombre de la impresora'); return; }
+  if (conexion === 'red' && !ip) { alert('Ingresa la dirección IP de la impresora'); return; }
+  const config = { nombre, conexion, papel, ip };
+  localStorage.setItem('printerConfig', JSON.stringify(config));
+  cargarConfigPrinter();
+  cerrarConfigPrinter();
+}
+
+function actualizarEstadoPrinter() {
+  const config = JSON.parse(localStorage.getItem('printerConfig') || 'null');
+  const statusText = document.getElementById('printerStatusText');
+  const statusDetail = document.getElementById('printerStatusDetail');
+  if (config && config.nombre) {
+    statusText.textContent = 'Configurada';
+    statusText.style.color = '#4caf50';
+    statusDetail.textContent = config.nombre + ' · ' + config.conexion.toUpperCase() + ' · ' + config.papel + 'mm';
+  } else {
+    statusText.textContent = 'No configurada';
+    statusText.style.color = 'var(--danger)';
+    statusDetail.textContent = 'Haz clic en el indicador de impresora para configurar';
+  }
+}
+
+async function probarImpresora() {
+  const config = JSON.parse(localStorage.getItem('printerConfig') || 'null');
+  if (!config || !config.nombre) { alert('Primero configura una impresora'); return; }
+  try {
+    const res = await fetch(API + '/api/imprimir', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        printerName: config.nombre,
+        printerConnection: config.conexion,
+        printerIP: config.ip,
+        folio: 0,
+        fecha: new Date().toLocaleString('es-MX'),
+        items: [{ producto_nombre: 'Prueba de conexion', cantidad: 1, peso: null, precio_unitario: 0, subtotal: 0 }],
+        total: 0,
+        recibido: 0,
+        cambio: 0
+      })
+    });
+    if (res.ok) {
+      mostrarBarcodeToast('Impresion enviada correctamente');
+    } else {
+      const err = await res.json();
+      alert('Error: ' + (err.error || 'No se pudo imprimir'));
+    }
+  } catch (e) {
+    alert('Error de conexion: ' + e.message);
+  }
+}
+
+let stockProductoActual = null;
+
+function abrirStockModal(producto) {
+  stockProductoActual = producto;
+  document.getElementById('stockProductoNombre').textContent = producto.nombre;
+  document.getElementById('stockActual').textContent = producto.stock.toFixed(producto.requiere_peso ? 3 : 0);
+  document.getElementById('stockAgregar').value = '';
+  document.getElementById('stockModal').classList.remove('hidden');
+  setTimeout(() => document.getElementById('stockAgregar').focus(), 100);
+}
+
+function cerrarStockModal() {
+  document.getElementById('stockModal').classList.add('hidden');
+  stockProductoActual = null;
+}
+
+async function confirmarAgregarStock() {
+  if (!stockProductoActual) return;
+  const cantidad = parseFloat(document.getElementById('stockAgregar').value);
+  if (isNaN(cantidad) || cantidad <= 0) { alert('Ingresa una cantidad válida'); return; }
+
+  const nuevoStock = stockProductoActual.stock + cantidad;
+  try {
+    const res = await fetch(API + '/api/productos/' + stockProductoActual.id, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        nombre: stockProductoActual.nombre,
+        categoria: stockProductoActual.categoria,
+        precio: stockProductoActual.precio,
+        requiere_peso: stockProductoActual.requiere_peso,
+        stock: nuevoStock,
+        codigo: stockProductoActual.codigo
+      })
+    });
+    if (!res.ok) { const d = await res.json(); alert(d.error || 'Error al actualizar stock'); return; }
+
+    const pid = stockProductoActual.id;
+    cerrarStockModal();
+    await cargarProductos();
+    agregarTicket(pid);
+    mostrarBarcodeToast('Stock actualizado');
+  } catch (e) {
+    alert('Error de conexión: ' + e.message);
+  }
+}
+
+document.getElementById('stockAgregar').addEventListener('keydown', e => {
+  if (e.key === 'Enter') confirmarAgregarStock();
+  if (e.key === 'Escape') cerrarStockModal();
+});
+
+document.getElementById('stockModal').addEventListener('click', e => {
+  if (e.target === document.getElementById('stockModal')) cerrarStockModal();
+});
+
+let productosSinBarcodeCache = [];
+
+function abrirAsignarBarcode() {
+  productosSinBarcodeCache = productos.filter(p => !p.codigo || p.codigo.trim() === '');
+  document.getElementById('asignarBarcodeCodigo').textContent = barcodeScannedCode;
+  document.getElementById('buscarSinBarcode').value = '';
+  renderProductosSinBarcode(productosSinBarcodeCache);
+  document.getElementById('barcodeNotFound').classList.add('hidden');
+  document.getElementById('asignarBarcodeModal').classList.remove('hidden');
+  setTimeout(() => document.getElementById('buscarSinBarcode').focus(), 100);
+}
+
+function renderProductosSinBarcode(lista) {
+  const contenedor = document.getElementById('productosSinBarcode');
+  if (!lista.length) {
+    contenedor.innerHTML = '<p style="text-align:center;color:var(--text-light);padding:20px">No se encontraron productos</p>';
+    return;
+  }
+  contenedor.innerHTML = lista.map(p => `
+    <div class="producto-sin-bc">
+      <div>
+        <div class="psb-nombre">${p.nombre}</div>
+        <div class="psb-info">${fmt(p.precio)}${p.categoria ? ' · ' + p.categoria : ''}</div>
+      </div>
+      <button class="psb-btn" onclick="asignarCodigoABarcode(${p.id})">Asignar</button>
+    </div>
+  `).join('');
+}
+
+document.getElementById('buscarSinBarcode').addEventListener('input', () => {
+  const q = document.getElementById('buscarSinBarcode').value.trim().toLowerCase();
+  if (!q) { renderProductosSinBarcode(productosSinBarcodeCache); return; }
+  const filtrados = productosSinBarcodeCache.filter(p => p.nombre.toLowerCase().includes(q) || (p.categoria && p.categoria.toLowerCase().includes(q)));
+  renderProductosSinBarcode(filtrados);
+});
+
+function cerrarAsignarBarcodeModal() {
+  document.getElementById('asignarBarcodeModal').classList.add('hidden');
+  document.getElementById('barcodeNotFound').classList.remove('hidden');
+}
+
+async function asignarCodigoABarcode(productoId) {
+  const p = productos.find(x => x.id === productoId);
+  if (!p) return;
+
+  try {
+    const res = await fetch(API + '/api/productos/' + productoId, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        nombre: p.nombre,
+        categoria: p.categoria,
+        precio: p.precio,
+        requiere_peso: p.requiere_peso,
+        stock: p.stock,
+        codigo: barcodeScannedCode
+      })
+    });
+    if (!res.ok) { const d = await res.json(); alert(d.error || 'Error al asignar código'); return; }
+
+    await cargarProductos();
+    agregarTicket(productoId);
+    mostrarBarcodeToast('Código asignado a ' + p.nombre);
+    cerrarBarcodeModal();
+    document.getElementById('asignarBarcodeModal').classList.add('hidden');
+  } catch (e) {
+    alert('Error de conexión: ' + e.message);
+  }
+}
+
+document.getElementById('buscarSinBarcode').addEventListener('keydown', e => {
+  if (e.key === 'Escape') cerrarAsignarBarcodeModal();
+});
+
+document.getElementById('asignarBarcodeModal').addEventListener('click', e => {
+  if (e.target === document.getElementById('asignarBarcodeModal')) {
+    cerrarAsignarBarcodeModal();
+  }
+});

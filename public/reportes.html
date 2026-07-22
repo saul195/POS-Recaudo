@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Reportes - Recaudo</title>
   <link rel="stylesheet" href="styles.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
 </head>
 <body>
   <header class="topbar">
@@ -17,7 +18,43 @@
   </header>
 
   <main class="page">
-    <div class="page-header"><h2>Ventas realizadas</h2></div>
+    <div class="page-header"><h2>Resumen de ventas</h2></div>
+
+    <div class="filtros">
+      <button class="btn btn-periodo active" data-periodo="hoy">Hoy</button>
+      <button class="btn btn-periodo" data-periodo="semana">Semana</button>
+      <button class="btn btn-periodo" data-periodo="mes">Mes</button>
+    </div>
+
+    <div class="resumen">
+      <div class="resumen-card"><div class="label">Ventas totales</div><div class="value" id="repTotalVentas">0</div></div>
+      <div class="resumen-card"><div class="label">Ingresos</div><div class="value" id="repIngresos">$0.00</div></div>
+      <div class="resumen-card"><div class="label">Ticket promedio</div><div class="value" id="repPromedio">$0.00</div></div>
+      <div class="resumen-card"><div class="label">Productos vendidos</div><div class="value" id="repUnidades">0</div></div>
+    </div>
+
+    <div class="chart-grid">
+      <div class="chart-box">
+        <h3>Top 10 ingresos por producto</h3>
+        <canvas id="chartIngresos"></canvas>
+      </div>
+      <div class="chart-box">
+        <h3>Top 10 cantidad vendida</h3>
+        <canvas id="chartCantidad"></canvas>
+      </div>
+    </div>
+
+    <h3 style="color:var(--primary);margin:20px 0 12px">Productos mas vendidos</h3>
+    <input type="text" id="buscarProductoReporte" placeholder="Buscar producto..." style="width:100%;max-width:350px;padding:10px 12px;border:2px solid var(--border);border-radius:var(--radius);font-size:0.95rem;margin-bottom:12px">
+    <div id="productosVacios" style="text-align:center;color:var(--text-light);padding:30px;background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);display:none">No hay ventas en este periodo</div>
+    <div id="productosCount" style="font-size:0.85rem;color:var(--text-light);margin-bottom:8px"></div>
+    <table id="tablaProductos">
+      <thead><tr><th>#</th><th>Producto</th><th>Cantidad vendida</th><th>Ingresos</th></tr></thead>
+      <tbody id="productosBody"></tbody>
+    </table>
+    <button id="btnMasProductos" class="btn btn-secondary" style="display:none;margin-top:12px;width:100%">Ver mas productos</button>
+
+    <div class="page-header" style="margin-top:32px"><h2>Historial de ventas</h2></div>
     <div class="filtros">
       <div class="campo"><label>Desde</label><input type="date" id="filtroDesde"></div>
       <div class="campo"><label>Hasta</label><input type="date" id="filtroHasta"></div>
@@ -25,19 +62,154 @@
       <button id="btnLimpiar" class="btn btn-secondary">Limpiar</button>
     </div>
     <div class="resumen">
-      <div class="resumen-card"><div class="label">Total ventas</div><div class="value" id="resumenTotal">$0.00</div></div>
-      <div class="resumen-card"><div class="label">Cantidad</div><div class="value" id="resumenCantidad">0</div></div>
-      <div class="resumen-card"><div class="label">Ticket promedio</div><div class="value" id="resumenPromedio">$0.00</div></div>
+      <div class="resumen-card"><div class="label">Total ventas</div><div class="value" id="histTotal">$0.00</div></div>
+      <div class="resumen-card"><div class="label">Cantidad</div><div class="value" id="histCantidad">0</div></div>
+      <div class="resumen-card"><div class="label">Ticket promedio</div><div class="value" id="histPromedio">$0.00</div></div>
     </div>
     <table>
       <thead><tr><th>Folio</th><th>Fecha</th><th>Productos</th><th>Total</th></tr></thead>
       <tbody id="ventasBody"></tbody>
     </table>
+    <button id="btnMasVentas" class="btn btn-secondary" style="display:none;margin-top:12px;width:100%">Cargar mas ventas</button>
+
+    <div style="margin-top:40px;padding:20px;background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);border-left:4px solid var(--danger)">
+      <h3 style="color:var(--danger);margin-bottom:8px">Zona de peligro</h3>
+      <p style="font-size:0.9rem;color:var(--text-light);margin-bottom:12px">Eliminar todas las ventas. Esta accion no se puede deshacer.</p>
+      <button id="btnBorrarVentas" class="btn btn-danger">Borrar todas las ventas</button>
+    </div>
   </main>
+
+  <style>
+    .btn-periodo{background:#e9ecef;color:var(--text);border:none;border-radius:var(--radius);padding:10px 20px;font-size:0.95rem;font-weight:600;cursor:pointer;transition:all 0.2s}
+    .btn-periodo.active{background:var(--primary);color:white}
+    .btn-periodo:hover:not(.active){background:#dee2e6}
+    .rank-num{width:28px;height:28px;border-radius:50%;background:var(--primary);color:white;display:inline-flex;align-items:center;justify-content:center;font-size:0.8rem;font-weight:700}
+    .rank-num.r2{background:#6c757d}
+    .rank-num.r3{background:#adb5bd}
+    .chart-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:16px 0}
+    .chart-box{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);padding:20px}
+    .chart-box h3{font-size:0.95rem;color:var(--text-light);margin:0 0 12px}
+    .btn-danger{background:var(--danger);color:white;border:none;border-radius:var(--radius);padding:10px 20px;font-size:0.95rem;font-weight:600;cursor:pointer;transition:all 0.2s}
+    .btn-danger:hover{background:#c1121f}
+    @media(max-width:768px){.chart-grid{grid-template-columns:1fr}}
+  </style>
 
   <script>
     const API = '';
     function fmt(n) { return '$' + Number(n).toFixed(2); }
+    let chartIngresosInstance = null;
+    let chartCantidadInstance = null;
+    const TOP_CHART = 10;
+    const PAGE_SIZE = 50;
+
+    const colores = ['#2d6a4f','#40916c','#52b788','#74c69d','#95d5b2','#b7e4c7','#d8f3dc','#ffb703','#fb8500','#e63946'];
+
+    function renderCharts(productos) {
+      if (chartIngresosInstance) chartIngresosInstance.destroy();
+      if (chartCantidadInstance) chartCantidadInstance.destroy();
+      if (!productos.length) return;
+
+      const top = productos.slice(0, TOP_CHART);
+      const labels = top.map(p => p.nombre.length > 18 ? p.nombre.substring(0, 16) + '...' : p.nombre);
+
+      chartIngresosInstance = new Chart(document.getElementById('chartIngresos'), {
+        type: 'bar',
+        data: {
+          labels,
+          datasets: [{
+            label: 'Ingresos ($)',
+            data: top.map(p => p.ingresos),
+            backgroundColor: colores,
+            borderRadius: 6
+          }]
+        },
+        options: {
+          responsive: true,
+          indexAxis: 'y',
+          plugins: { legend: { display: false } },
+          scales: { x: { beginAtZero: true, ticks: { callback: v => '$' + v } } }
+        }
+      });
+
+      chartCantidadInstance = new Chart(document.getElementById('chartCantidad'), {
+        type: 'doughnut',
+        data: {
+          labels,
+          datasets: [{
+            data: top.map(p => p.peso ? parseFloat(p.cantidad.toFixed(3)) : Math.round(p.cantidad)),
+            backgroundColor: colores,
+            borderWidth: 2,
+            borderColor: '#fff'
+          }]
+        },
+        options: {
+          responsive: true,
+          plugins: { legend: { position: 'bottom', labels: { font: { size: 11 }, padding: 8 } } }
+        }
+      });
+    }
+
+    let todosProductos = [];
+    let productosMostrados = 20;
+
+    function renderTablaProductos(productos) {
+      const tbody = document.getElementById('productosBody');
+      const tabla = document.getElementById('tablaProductos');
+      const vacio = document.getElementById('productosVacios');
+      const countEl = document.getElementById('productosCount');
+      const btnMas = document.getElementById('btnMasProductos');
+
+      if (!productos.length) {
+        tbody.innerHTML = '';
+        tabla.style.display = 'none';
+        vacio.style.display = 'block';
+        countEl.textContent = '';
+        btnMas.style.display = 'none';
+        return;
+      }
+      tabla.style.display = '';
+      vacio.style.display = 'none';
+      const mostrar = productos.slice(0, productosMostrados);
+      countEl.textContent = 'Mostrando ' + mostrar.length + ' de ' + productos.length;
+      tbody.innerHTML = mostrar.map((p, i) => {
+        const cls = i === 0 ? '' : i === 1 ? ' r2' : i === 2 ? ' r3' : '';
+        const cant = p.cantidad % 1 === 0 ? p.cantidad.toFixed(0) : p.cantidad.toFixed(3);
+        return `<tr><td><span class="rank-num${cls}">${i + 1}</span></td><td><strong>${p.nombre}</strong></td><td>${cant}</td><td><strong>${fmt(p.ingresos)}</strong></td></tr>`;
+      }).join('');
+      btnMas.style.display = productos.length > productosMostrados ? '' : 'none';
+    }
+
+    document.getElementById('btnMasProductos').addEventListener('click', () => {
+      productosMostrados += 20;
+      renderTablaProductos(todosProductos);
+    });
+
+    document.getElementById('buscarProductoReporte').addEventListener('input', function() {
+      const q = this.value.trim().toLowerCase();
+      if (!q) { renderTablaProductos(todosProductos); return; }
+      const filtrados = todosProductos.filter(p => p.nombre.toLowerCase().includes(q));
+      renderTablaProductos(filtrados);
+    });
+
+    async function cargarReporte(periodo) {
+      document.querySelectorAll('.btn-periodo').forEach(b => b.classList.toggle('active', b.dataset.periodo === periodo));
+      const res = await fetch(API + '/api/reportes?periodo=' + periodo);
+      const data = await res.json();
+      document.getElementById('repTotalVentas').textContent = data.totalVentas;
+      document.getElementById('repIngresos').textContent = fmt(data.totalIngresos);
+      document.getElementById('repPromedio').textContent = data.totalVentas ? fmt(data.totalIngresos / data.totalVentas) : '$0.00';
+      const totalUnidades = data.productos.reduce((s, p) => s + p.cantidad, 0);
+      document.getElementById('repUnidades').textContent = totalUnidades % 1 === 0 ? totalUnidades : totalUnidades.toFixed(3);
+      renderCharts(data.productos);
+      todosProductos = data.productos;
+      productosMostrados = 20;
+      document.getElementById('buscarProductoReporte').value = '';
+      renderTablaProductos(todosProductos);
+    }
+
+    document.querySelectorAll('.btn-periodo').forEach(b => {
+      b.addEventListener('click', () => cargarReporte(b.dataset.periodo));
+    });
 
     function setFechasDefault() {
       const hoy = new Date();
@@ -46,21 +218,35 @@
       document.getElementById('filtroHasta').value = hoy.toISOString().split('T')[0];
     }
 
+    let todasVentas = [];
+    let ventasMostradas = 0;
+
+    function renderVentas() {
+      const mostrar = todasVentas.slice(0, ventasMostradas);
+      let total = 0;
+      document.getElementById('ventasBody').innerHTML = mostrar.map(v => {
+        total += v.total;
+        const items = (v.items || []).map(i => i.producto_nombre + ' x' + (i.peso ? i.cantidad.toFixed(3) : i.cantidad.toFixed(0))).join(', ');
+        return `<tr><td data-label="Folio"><strong>#${String(v.folio).padStart(4,'0')}</strong></td><td data-label="Fecha">${v.created_at}</td><td data-label="Productos"><div class="detalle-items">${items || '—'}</div></td><td data-label="Total"><strong>${fmt(v.total)}</strong></td></tr>`;
+      }).join('');
+      document.getElementById('histTotal').textContent = fmt(total);
+      document.getElementById('histCantidad').textContent = mostrar.length;
+      document.getElementById('histPromedio').textContent = mostrar.length ? fmt(total / mostrar.length) : '$0.00';
+      document.getElementById('btnMasVentas').style.display = ventasMostradas < todasVentas.length ? '' : 'none';
+    }
+
+    document.getElementById('btnMasVentas').addEventListener('click', () => {
+      ventasMostradas += PAGE_SIZE;
+      renderVentas();
+    });
+
     async function cargarVentas(desde, hasta) {
       let url = API + '/api/ventas';
       if (desde && hasta) url += '?desde=' + encodeURIComponent(desde) + '&hasta=' + encodeURIComponent(hasta);
       const res = await fetch(url);
-      let ventas = await res.json();
-      ventas.reverse();
-      let total = 0;
-      document.getElementById('ventasBody').innerHTML = ventas.map(v => {
-        total += v.total;
-        const items = (v.items || []).map(i => i.producto_nombre + ' x' + i.cantidad).join(', ');
-        return `<tr><td data-label="Folio"><strong>#${String(v.folio).padStart(4,'0')}</strong></td><td data-label="Fecha">${v.created_at}</td><td data-label="Productos"><div class="detalle-items">${items || '—'}</div></td><td data-label="Total"><strong>${fmt(v.total)}</strong></td></tr>`;
-      }).join('');
-      document.getElementById('resumenTotal').textContent = fmt(total);
-      document.getElementById('resumenCantidad').textContent = ventas.length;
-      document.getElementById('resumenPromedio').textContent = ventas.length ? fmt(total / ventas.length) : '$0.00';
+      todasVentas = (await res.json()).reverse();
+      ventasMostradas = PAGE_SIZE;
+      renderVentas();
     }
 
     document.getElementById('btnFiltrar').addEventListener('click', () => {
@@ -70,8 +256,28 @@
       cargarVentas(d, h);
     });
     document.getElementById('btnLimpiar').addEventListener('click', () => { setFechasDefault(); cargarVentas(); });
+
     setFechasDefault();
+    cargarReporte('hoy');
     cargarVentas();
+
+    document.getElementById('btnBorrarVentas').addEventListener('click', async () => {
+      if (!confirm('¿Estás seguro de borrar TODAS las ventas?\n\nEsta acción no se puede deshacer.')) return;
+      if (!confirm('Última confirmación: Se eliminarán todas las ventas registradas.')) return;
+      try {
+        const res = await fetch(API + '/api/ventas', { method: 'DELETE' });
+        const data = await res.json();
+        if (res.ok) {
+          alert('Todas las ventas fueron eliminadas');
+          cargarReporte('hoy');
+          cargarVentas();
+        } else {
+          alert(data.error || 'Error al eliminar ventas');
+        }
+      } catch (e) {
+        alert('Error de conexión: ' + e.message);
+      }
+    });
   </script>
 </body>
 </html>
