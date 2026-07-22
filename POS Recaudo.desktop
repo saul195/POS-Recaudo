@@ -1,0 +1,8 @@
+[Desktop Entry]
+Name=POS Recaudo
+Comment=Sistema de punto de venta
+Exec=bash -c "cd %k && bash iniciar.sh"
+Icon=utilities-terminal
+Terminal=true
+Type=Application
+Categories=Office;Finance;
