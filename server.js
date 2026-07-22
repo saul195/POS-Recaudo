@@ -9,6 +9,8 @@ const os = require('os');
 const PORT = process.env.PORT || 3000;
 const PUBLIC_DIR = path.join(__dirname, 'public');
 const DB_PATH = path.join(__dirname, 'database.sqlite');
+const IS_WINDOWS = process.platform === 'win32';
+const IS_LINUX = process.platform === 'linux';
 
 let db;
 
@@ -371,6 +373,22 @@ Write-Output "OK:$written"
   }
 }
 
+function imprimirLinux(printerName, escposData) {
+  const dataFile = path.join(os.tmpdir(), 'ticket_data_' + Date.now() + '.bin');
+  fs.writeFileSync(dataFile, escposData, 'binary');
+  try {
+    execSync(`lp -d "${printerName}" -o raw "${dataFile}"`, {
+      timeout: 10000,
+      encoding: 'utf8'
+    });
+    console.log('[Impresion] Enviado a', printerName, 'via CUPS');
+  } finally {
+    setTimeout(() => {
+      try { fs.unlinkSync(dataFile); } catch(e) {}
+    }, 1000);
+  }
+}
+
 function handleVentas(req, res, url) {
   const method = req.method;
 
@@ -515,6 +533,14 @@ async function start() {
     const url = new URL(req.url, `http://${req.headers.host}`);
 
     if (url.pathname.startsWith('/api/')) {
+      if (url.pathname === '/api/platform' && req.method === 'GET') {
+        sendJSON(res, 200, {
+          platform: process.platform,
+          isWindows: IS_WINDOWS,
+          isLinux: IS_LINUX
+        });
+        return;
+      }
       if (url.pathname === '/api/imprimir' && req.method === 'POST') {
         readBody(req).then(async data => {
           try {
@@ -522,7 +548,13 @@ async function start() {
             if (data.printerConnection === 'red' && data.printerIP) {
               await imprimirTCP(data.printerIP, 9100, ticket);
             } else if (data.printerName) {
-              imprimirWindows(data.printerName, ticket);
+              if (IS_WINDOWS) {
+                imprimirWindows(data.printerName, ticket);
+              } else if (IS_LINUX) {
+                imprimirLinux(data.printerName, ticket);
+              } else {
+                sendJSON(res, 400, { error: 'Impresion USB no soportada en este sistema operativo: ' + process.platform }); return;
+              }
             } else {
               sendJSON(res, 400, { error: 'No hay impresora configurada' }); return;
             }

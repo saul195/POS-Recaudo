@@ -4,6 +4,7 @@ function fmt(n) { return '$' + Number(n).toFixed(2); }
 
 let productos = [];
 let ticket = [];
+let platformInfo = { platform: 'unknown', isWindows: false, isLinux: false };
 
 async function cargarProductos() {
   const res = await fetch(API + '/api/productos');
@@ -390,14 +391,34 @@ document.addEventListener('keydown', e => {
 });
 
 async function init() {
-  const res = await fetch(API + '/api/ventas/folio');
-  const data = await res.json();
-  document.getElementById('folioDisplay').textContent = String(data.folio).padStart(3, '0');
+  const [folioRes, platRes] = await Promise.all([
+    fetch(API + '/api/ventas/folio'),
+    fetch(API + '/api/platform')
+  ]);
+  const folioData = await folioRes.json();
+  platformInfo = await platRes.json();
+  document.getElementById('folioDisplay').textContent = String(folioData.folio).padStart(3, '0');
+  adaptarUIPlataforma();
   await cargarProductos();
   cargarConfigPrinter();
 }
 
 init();
+
+function adaptarUIPlataforma() {
+  const printerNameInput = document.getElementById('printerNameInput');
+  const printerConnection = document.getElementById('printerConnection');
+  const printerNameHint = document.getElementById('printerNameHint');
+  if (platformInfo.isLinux) {
+    printerNameInput.placeholder = 'Ej: Epson_TM-T20, Xprinter, etc.';
+    printerNameHint.textContent = 'Linux: usa nombres de CUPS. Verifica con: lpstat -p';
+  } else if (platformInfo.isWindows) {
+    printerNameInput.placeholder = 'Ej: Epson TM-T20II, Xprinter, etc.';
+    printerNameHint.textContent = '';
+  } else {
+    printerNameHint.textContent = '';
+  }
+}
 
 function cargarConfigPrinter() {
   const config = JSON.parse(localStorage.getItem('printerConfig') || 'null');
@@ -420,6 +441,7 @@ function abrirConfigPrinter() {
     document.getElementById('printerPaper').value = config.papel || '80';
     document.getElementById('printerIp').value = config.ip || '';
   }
+  adaptarUIPlataforma();
   toggleIpField();
   actualizarEstadoPrinter();
   document.getElementById('printerModal').classList.remove('hidden');
@@ -456,7 +478,13 @@ function actualizarEstadoPrinter() {
   if (config && config.nombre) {
     statusText.textContent = 'Configurada';
     statusText.style.color = '#4caf50';
-    statusDetail.textContent = config.nombre + ' · ' + config.conexion.toUpperCase() + ' · ' + config.papel + 'mm';
+    let detail = config.nombre + ' · ' + config.conexion.toUpperCase() + ' · ' + config.papel + 'mm';
+    if (config.conexion === 'usb' && platformInfo.isLinux) {
+      detail += ' · Linux (CUPS)';
+    } else if (config.conexion === 'usb' && platformInfo.isWindows) {
+      detail += ' · Windows';
+    }
+    statusDetail.textContent = detail;
   } else {
     statusText.textContent = 'No configurada';
     statusText.style.color = 'var(--danger)';
