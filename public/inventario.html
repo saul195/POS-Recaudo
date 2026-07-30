@@ -43,7 +43,7 @@
     </div>
     <table>
       <thead>
-        <tr><th>C&oacute;digo</th><th>Nombre</th><th>Categor&iacute;a</th><th>Precio</th><th>Stock</th><th>Tipo</th><th>Acciones</th></tr>
+        <tr><th>C&oacute;digo</th><th>Nombre</th><th>Categor&iacute;a</th><th>Precio</th><th>Tipo</th><th>Acciones</th></tr>
       </thead>
       <tbody id="invBody"></tbody>
     </table>
@@ -66,8 +66,8 @@
           </select>
         </div>
         <div class="full"><label>Nombre</label><input type="text" id="formNombre" placeholder="Nombre del producto"></div>
-        <div><label>Precio (Opcional)</label><input type="number" id="formPrecio" step="0.01" min="0" placeholder="0.00"></div>
-        <div><label>Stock</label><input type="number" id="formStock" step="0.001" min="0" value="0"></div>
+        <div><label>Precio actual</label><input type="number" id="formPrecioActual" step="0.01" min="0" readonly style="background:#f0f0f0;cursor:not-allowed"></div>
+        <div><label>Nuevo precio</label><input type="number" id="formPrecio" step="0.01" min="0" placeholder="0.00"></div>
         <div class="full checkbox-group">
           <input type="checkbox" id="formRequierePeso">
           <label>Requiere peso (frutas/verduras)</label>
@@ -121,7 +121,6 @@
           <td data-label="Nombre"><strong>${p.nombre}</strong></td>
           <td data-label="Categoría">${p.categoria || '-'}</td>
           <td data-label="Precio">${fmt(p.precio)}</td>
-          <td data-label="Stock" class="${p.stock <= 5 ? 'stock-bajo' : ''}">${p.requiere_peso ? Number(p.stock).toFixed(3)+' kg' : Number(p.stock).toFixed(0)+' pz'}</td>
           <td data-label="Tipo">${p.requiere_peso ? '<span class="badge">Por peso</span>' : 'Unidad'}</td>
           <td data-label="" class="actions">
             <button class="btn btn-secondary btn-sm" onclick="editar(${p.id})">Editar</button>
@@ -137,8 +136,8 @@
       document.getElementById('formCodigo').value = p ? (p.codigo || '') : '';
       document.getElementById('formNombre').value = p ? p.nombre : '';
       document.getElementById('formCategoria').value = p ? (p.categoria || '') : '';
+      document.getElementById('formPrecioActual').value = p ? p.precio : '';
       document.getElementById('formPrecio').value = p ? p.precio : '';
-      document.getElementById('formStock').value = p ? p.stock : '0';
       document.getElementById('formRequierePeso').checked = p ? !!p.requiere_peso : false;
       document.getElementById('modalProducto').classList.remove('hidden');
     }
@@ -165,8 +164,7 @@
         nombre: document.getElementById('formNombre').value,
         categoria: document.getElementById('formCategoria').value || null,
         precio: parseFloat(document.getElementById('formPrecio').value) || 0,
-        requiere_peso: document.getElementById('formRequierePeso').checked,
-        stock: parseFloat(document.getElementById('formStock').value) || 0
+        requiere_peso: document.getElementById('formRequierePeso').checked
       };
       if (!data.nombre) { alert('El nombre es obligatorio'); return; }
 

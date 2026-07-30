@@ -80,7 +80,6 @@
           <div class="full"><label>Nombre *</label><input type="text" id="bcNombre" required></div>
           <div><label>Categoría</label><input type="text" id="bcCategoria"></div>
           <div><label>Precio *</label><input type="number" id="bcPrecio" step="0.01" min="0" required></div>
-          <div><label>Stock *</label><input type="number" id="bcStock" step="0.001" min="0" required></div>
           <div class="checkbox-group full">
             <input type="checkbox" id="bcPeso">
             <label for="bcPeso">Se vende por peso</label>
@@ -90,25 +89,6 @@
           <button class="btn btn-secondary" onclick="cerrarBarcodeModal()">Cancelar</button>
           <button class="btn btn-primary" onclick="agregarProductoRapido()">Guardar y agregar</button>
         </div>
-      </div>
-    </div>
-  </div>
-
-  <div id="stockModal" class="modal hidden">
-    <div class="modal-content">
-      <span class="modal-close" onclick="cerrarStockModal()">&times;</span>
-      <h3>Sin stock — Agregar stock</h3>
-      <p>Producto: <strong id="stockProductoNombre"></strong></p>
-      <p style="font-size:0.85rem;color:var(--text-light);margin-top:-8px;margin-bottom:12px">Stock actual: <strong id="stockActual">0</strong></p>
-      <div class="form-grid">
-        <div class="full">
-          <label>Cantidad a agregar *</label>
-          <input type="number" id="stockAgregar" step="0.001" min="0.001" placeholder="Cantidad">
-        </div>
-      </div>
-      <div class="modal-buttons">
-        <button class="btn btn-secondary" onclick="cerrarStockModal()">Cancelar</button>
-        <button class="btn btn-primary" onclick="confirmarAgregarStock()">Agregar y agregar al ticket</button>
       </div>
     </div>
   </div>

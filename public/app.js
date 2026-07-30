@@ -6,10 +6,14 @@ let productos = [];
 let ticket = [];
 let platformInfo = { platform: 'unknown', isWindows: false, isLinux: false };
 
+function productosSinCodigo() {
+  return productos.filter(p => !p.codigo);
+}
+
 async function cargarProductos() {
   const res = await fetch(API + '/api/productos');
   productos = await res.json();
-  renderProductos(productos);
+  renderProductos(productosSinCodigo());
 }
 
 function renderProductos(lista) {
@@ -25,11 +29,6 @@ function renderProductos(lista) {
   `).join('');
 }
 
-function obtenerStockTicket(item) {
-  const prod = productos.find(p => p.id === item.id);
-  return prod ? prod.stock : 0;
-}
-
 function actualizarTicket() {
   const c = document.getElementById('ticketItems');
   const totalEl = document.getElementById('totalDisplay');
@@ -40,17 +39,14 @@ function actualizarTicket() {
   c.innerHTML = ticket.map((item, i) => {
     const subtotal = item.cantidad * item.precio;
     total += subtotal;
-    const stock = obtenerStockTicket(item);
-    const excede = item.cantidad > 0 && item.cantidad > stock;
     return `
-      <div class="ticket-item ${excede ? 'ticket-excede' : ''}">
+      <div class="ticket-item">
         <div>
           <div class="item-nombre">${item.nombre}</div>
           <div class="item-detalle">
             ${item.peso
-              ? `<input class="cant-input ${excede ? 'cant-excede' : ''}" type="number" step="0.001" min="0" value="${item.cantidad}" onchange="cambiarCantidadTicket(${i}, this.value)" onfocus="this.select()"> kg x ${fmt(item.precio)}/kg`
-              : `<input class="cant-input ${excede ? 'cant-excede' : ''}" type="number" step="1" min="0" value="${item.cantidad}" onchange="cambiarCantidadTicket(${i}, this.value)" onfocus="this.select()"> x ${fmt(item.precio)}`}
-            ${excede ? `<div class="stock-aviso">Stock disp: ${stock.toFixed(item.peso ? 3 : 0)}</div>` : ''}
+              ? `<input class="cant-input" type="number" step="0.001" min="0" value="${item.cantidad}" onchange="cambiarCantidadTicket(${i}, this.value)" onfocus="this.select()"> kg x ${fmt(item.precio)}/kg`
+              : `<input class="cant-input" type="number" step="1" min="0" value="${item.cantidad}" onchange="cambiarCantidadTicket(${i}, this.value)" onfocus="this.select()"> x ${fmt(item.precio)}`}
           </div>
         </div>
         <div class="item-subtotal">${fmt(subtotal)}</div>
@@ -81,11 +77,8 @@ function agregarTicket(id) {
     ticket.push({ id: p.id, nombre: p.nombre, precio: p.precio, cantidad: 0, peso: null });
     abrirPesoModal(ticket.length - 1);
   } else {
-    if (p.stock <= 0) { abrirStockModal(p); return; }
     const exist = ticket.findIndex(x => x.id === p.id);
     if (exist >= 0) {
-      const enTicket = ticket[exist].cantidad;
-      if (enTicket >= p.stock) { alert('Stock insuficiente'); return; }
       ticket[exist].cantidad += 1;
     } else {
       ticket.push({ id: p.id, nombre: p.nombre, precio: p.precio, cantidad: 1, peso: null });
@@ -117,7 +110,7 @@ function cerrarPesoModal() {
   pesoEditIndex = -1;
   searchInput.value = '';
   searchResults.classList.remove('visible');
-  renderProductos(productos);
+  renderProductos(productosSinCodigo());
 }
 
 document.getElementById('btnPesoConfirmar').addEventListener('click', () => {
@@ -125,8 +118,6 @@ document.getElementById('btnPesoConfirmar').addEventListener('click', () => {
   if (!peso || peso <= 0) { alert('Ingresa un peso v\u00e1lido'); return; }
   if (pesoEditIndex >= 0 && ticket[pesoEditIndex]) {
     const item = ticket[pesoEditIndex];
-    const prod = productos.find(p => p.id === item.id);
-    if (prod && peso > prod.stock) { alert('Stock insuficiente. Disponible: ' + prod.stock.toFixed(3) + ' kg'); return; }
     item.peso = peso;
     item.cantidad = peso;
     document.getElementById('pesoModal').classList.add('hidden');
@@ -168,7 +159,6 @@ function abrirBarcodeModal(codigo) {
   document.getElementById('bcNombre').value = '';
   document.getElementById('bcCategoria').value = '';
   document.getElementById('bcPrecio').value = '';
-  document.getElementById('bcStock').value = '';
   document.getElementById('bcPeso').checked = false;
   document.getElementById('barcodeModal').classList.remove('hidden');
 }
@@ -178,7 +168,7 @@ function cerrarBarcodeModal() {
   barcodeScannedCode = '';
   searchInput.value = '';
   searchResults.classList.remove('visible');
-  renderProductos(productos);
+  renderProductos(productosSinCodigo());
 }
 
 function mostrarFormRapido() {
@@ -191,18 +181,16 @@ async function agregarProductoRapido() {
   const nombre = document.getElementById('bcNombre').value.trim();
   const categoria = document.getElementById('bcCategoria').value.trim() || null;
   const precio = parseFloat(document.getElementById('bcPrecio').value);
-  const stock = parseFloat(document.getElementById('bcStock').value);
   const requiere_peso = document.getElementById('bcPeso').checked ? 1 : 0;
 
   if (!nombre) { alert('Ingresa el nombre del producto'); return; }
   if (isNaN(precio) || precio < 0) { alert('Ingresa un precio válido'); return; }
-  if (isNaN(stock) || stock < 0) { alert('Ingresa el stock válido'); return; }
 
   try {
     const res = await fetch(API + '/api/productos', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ codigo: barcodeScannedCode, nombre, categoria, precio, stock, requiere_peso })
+      body: JSON.stringify({ codigo: barcodeScannedCode, nombre, categoria, precio, requiere_peso })
     });
     const data = await res.json();
     if (!res.ok) { alert(data.error || 'Error al crear producto'); return; }
@@ -331,14 +319,6 @@ async function cobrar() {
   });
   if (sinPeso.length) { alert('Hay productos por peso sin asignar'); return; }
 
-  for (const item of items) {
-    const prod = productos.find(p => p.id === item.producto_id);
-    if (prod && item.cantidad > prod.stock) {
-      alert('Stock insuficiente para ' + prod.nombre + '. Disponible: ' + prod.stock.toFixed(3));
-      return;
-    }
-  }
-
   const total = items.reduce((sum, i) => sum + i.cantidad * i.precio_unitario, 0);
   abrirCobroModal(total, items);
 }
@@ -351,7 +331,7 @@ const searchResults = document.getElementById('searchResults');
 
 searchInput.addEventListener('input', () => {
   const q = searchInput.value.trim().toLowerCase();
-  if (!q) { searchResults.classList.remove('visible'); renderProductos(productos); return; }
+  if (!q) { searchResults.classList.remove('visible'); renderProductos(productosSinCodigo()); return; }
   const filtrados = productos.filter(p =>
     p.nombre.toLowerCase().includes(q) || (p.codigo && p.codigo.toLowerCase().includes(q))
   );
@@ -376,7 +356,7 @@ searchInput.addEventListener('keydown', e => {
       mostrarBarcodeToast('Agregado: ' + encontrado.nombre);
       searchInput.value = '';
       searchResults.classList.remove('visible');
-      renderProductos(productos);
+      renderProductos(productosSinCodigo());
     } else {
       abrirBarcodeModal(valor);
     }
@@ -522,62 +502,6 @@ async function probarImpresora() {
   }
 }
 
-let stockProductoActual = null;
-
-function abrirStockModal(producto) {
-  stockProductoActual = producto;
-  document.getElementById('stockProductoNombre').textContent = producto.nombre;
-  document.getElementById('stockActual').textContent = producto.stock.toFixed(producto.requiere_peso ? 3 : 0);
-  document.getElementById('stockAgregar').value = '';
-  document.getElementById('stockModal').classList.remove('hidden');
-  setTimeout(() => document.getElementById('stockAgregar').focus(), 100);
-}
-
-function cerrarStockModal() {
-  document.getElementById('stockModal').classList.add('hidden');
-  stockProductoActual = null;
-}
-
-async function confirmarAgregarStock() {
-  if (!stockProductoActual) return;
-  const cantidad = parseFloat(document.getElementById('stockAgregar').value);
-  if (isNaN(cantidad) || cantidad <= 0) { alert('Ingresa una cantidad válida'); return; }
-
-  const nuevoStock = stockProductoActual.stock + cantidad;
-  try {
-    const res = await fetch(API + '/api/productos/' + stockProductoActual.id, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        nombre: stockProductoActual.nombre,
-        categoria: stockProductoActual.categoria,
-        precio: stockProductoActual.precio,
-        requiere_peso: stockProductoActual.requiere_peso,
-        stock: nuevoStock,
-        codigo: stockProductoActual.codigo
-      })
-    });
-    if (!res.ok) { const d = await res.json(); alert(d.error || 'Error al actualizar stock'); return; }
-
-    const pid = stockProductoActual.id;
-    cerrarStockModal();
-    await cargarProductos();
-    agregarTicket(pid);
-    mostrarBarcodeToast('Stock actualizado');
-  } catch (e) {
-    alert('Error de conexión: ' + e.message);
-  }
-}
-
-document.getElementById('stockAgregar').addEventListener('keydown', e => {
-  if (e.key === 'Enter') confirmarAgregarStock();
-  if (e.key === 'Escape') cerrarStockModal();
-});
-
-document.getElementById('stockModal').addEventListener('click', e => {
-  if (e.target === document.getElementById('stockModal')) cerrarStockModal();
-});
-
 let productosSinBarcodeCache = [];
 
 function abrirAsignarBarcode() {
@@ -632,7 +556,6 @@ async function asignarCodigoABarcode(productoId) {
         categoria: p.categoria,
         precio: p.precio,
         requiere_peso: p.requiere_peso,
-        stock: p.stock,
         codigo: barcodeScannedCode
       })
     });

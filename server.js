@@ -115,8 +115,8 @@ function handleProductos(req, res, url) {
         if (dupCod.length && dupCod[0].values.length) { sendJSON(res, 409, { error: 'Ya existe un producto con ese código de barras' }); return; }
       }
       db.run(
-        'INSERT INTO productos (codigo, nombre, categoria, precio, requiere_peso, stock) VALUES (?, ?, ?, ?, ?, ?)',
-        [data.codigo || null, data.nombre.trim(), data.categoria || null, parseFloat(data.precio) || 0, data.requiere_peso ? 1 : 0, parseFloat(data.stock) || 0]
+        'INSERT INTO productos (codigo, nombre, categoria, precio, requiere_peso) VALUES (?, ?, ?, ?, ?)',
+        [data.codigo || null, data.nombre.trim(), data.categoria || null, parseFloat(data.precio) || 0, data.requiere_peso ? 1 : 0]
       );
       const lastId = db.exec('SELECT last_insert_rowid()')[0].values[0][0];
       const nuevo = db.exec('SELECT * FROM productos WHERE id = ' + lastId);
@@ -149,14 +149,13 @@ function handleProductos(req, res, url) {
           if (dupCod.length && dupCod[0].values.length) { sendJSON(res, 409, { error: 'Ya existe un producto con ese código de barras' }); return; }
         }
         db.run(
-          'UPDATE productos SET codigo = ?, nombre = ?, categoria = ?, precio = ?, requiere_peso = ?, stock = ? WHERE id = ?',
+          'UPDATE productos SET codigo = ?, nombre = ?, categoria = ?, precio = ?, requiere_peso = ? WHERE id = ?',
           [
             data.codigo !== undefined ? (data.codigo || null) : existing.codigo,
             data.nombre.trim(),
             data.categoria !== undefined ? (data.categoria || null) : existing.categoria,
             parseFloat(data.precio) || 0,
             data.requiere_peso !== undefined ? (data.requiere_peso ? 1 : 0) : existing.requiere_peso,
-            parseFloat(data.stock) || 0,
             id
           ]
         );
@@ -192,8 +191,8 @@ function handleImport(req, res) {
       const dup = db.exec("SELECT id FROM productos WHERE LOWER(TRIM(nombre)) = LOWER(TRIM('" + item.nombre.trim().replace(/'/g, "''") + "'))");
       if (dup.length && dup[0].values.length) continue;
       db.run(
-        'INSERT INTO productos (codigo, nombre, categoria, precio, requiere_peso, stock) VALUES (?, ?, ?, ?, ?, ?)',
-        [item.codigo || null, item.nombre.trim(), item.categoria || null, parseFloat(item.precio) || 0, item.requiere_peso ? 1 : 0, parseFloat(item.stock) || 0]
+        'INSERT INTO productos (codigo, nombre, categoria, precio, requiere_peso) VALUES (?, ?, ?, ?, ?)',
+        [item.codigo || null, item.nombre.trim(), item.categoria || null, parseFloat(item.precio) || 0, item.requiere_peso ? 1 : 0]
       );
       count++;
     }
@@ -412,7 +411,7 @@ function handleVentas(req, res, url) {
     const hasta = url.searchParams.get('hasta');
     let result;
     if (desde && hasta) {
-      result = db.exec("SELECT * FROM ventas WHERE created_at >= '" + desde + "' AND created_at <= '" + hasta + " 23:59:59' ORDER BY id DESC");
+      result = db.exec("SELECT * FROM ventas WHERE fecha_venta >= '" + desde + "' AND fecha_venta <= '" + hasta + "' ORDER BY id DESC");
     } else {
       result = db.exec('SELECT * FROM ventas ORDER BY id DESC');
     }
@@ -462,12 +461,6 @@ function handleVentas(req, res, url) {
       for (const item of data.items) {
         const prod = parseRow(db.exec('SELECT * FROM productos WHERE id = ' + item.producto_id));
         if (!prod) { sendJSON(res, 400, { error: 'Producto no encontrado: ' + item.producto_id }); return; }
-        if (item.cantidad > prod.stock) { sendJSON(res, 400, { error: 'Stock insuficiente para ' + prod.nombre + '. Disponible: ' + prod.stock.toFixed(3) }); return; }
-      }
-      for (const item of data.items) {
-        const prod = parseRow(db.exec('SELECT stock FROM productos WHERE id = ' + item.producto_id));
-        const nuevoStock = Math.max(0, prod.stock - item.cantidad);
-        db.run('UPDATE productos SET stock = ? WHERE id = ?', [nuevoStock, item.producto_id]);
       }
       const hoy = fechaLocal();
       const folioResult = db.exec("SELECT COALESCE(MAX(folio), 0) + 1 AS folio FROM ventas WHERE fecha_venta = '" + hoy + "'");
@@ -504,8 +497,7 @@ async function start() {
       nombre TEXT NOT NULL UNIQUE,
       categoria TEXT,
       precio REAL DEFAULT 0,
-      requiere_peso INTEGER DEFAULT 0,
-      stock REAL DEFAULT 0
+      requiere_peso INTEGER DEFAULT 0
     )
   `);
   db.run(`

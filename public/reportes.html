@@ -56,10 +56,9 @@
 
     <div class="page-header" style="margin-top:32px"><h2>Historial de ventas</h2></div>
     <div class="filtros">
-      <div class="campo"><label>Desde</label><input type="date" id="filtroDesde"></div>
-      <div class="campo"><label>Hasta</label><input type="date" id="filtroHasta"></div>
+      <div class="campo"><label>Día</label><input type="date" id="filtroDia"></div>
       <button id="btnFiltrar" class="btn btn-primary">Filtrar</button>
-      <button id="btnLimpiar" class="btn btn-secondary">Limpiar</button>
+      <button id="btnLimpiar" class="btn btn-secondary">Hoy</button>
     </div>
     <div class="resumen">
       <div class="resumen-card"><div class="label">Total ventas</div><div class="value" id="histTotal">$0.00</div></div>
@@ -211,11 +210,12 @@
       b.addEventListener('click', () => cargarReporte(b.dataset.periodo));
     });
 
-    function setFechasDefault() {
-      const hoy = new Date();
-      const inicio = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
-      document.getElementById('filtroDesde').value = inicio.toISOString().split('T')[0];
-      document.getElementById('filtroHasta').value = hoy.toISOString().split('T')[0];
+    function fechaLocalStr() {
+      const d = new Date();
+      return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+    }
+    function setFechaDefault() {
+      document.getElementById('filtroDia').value = fechaLocalStr();
     }
 
     let todasVentas = [];
@@ -240,26 +240,28 @@
       renderVentas();
     });
 
-    async function cargarVentas(desde, hasta) {
+    function cargarVentas(dia) {
       let url = API + '/api/ventas';
-      if (desde && hasta) url += '?desde=' + encodeURIComponent(desde) + '&hasta=' + encodeURIComponent(hasta);
-      const res = await fetch(url);
-      todasVentas = (await res.json()).reverse();
-      ventasMostradas = PAGE_SIZE;
-      renderVentas();
+      if (dia) url += '?desde=' + encodeURIComponent(dia) + '&hasta=' + encodeURIComponent(dia);
+      fetch(url).then(res => res.json()).then(data => {
+        todasVentas = data.reverse();
+        ventasMostradas = PAGE_SIZE;
+        renderVentas();
+      });
     }
 
     document.getElementById('btnFiltrar').addEventListener('click', () => {
-      const d = document.getElementById('filtroDesde').value;
-      const h = document.getElementById('filtroHasta').value;
-      if (!d || !h) { alert('Selecciona ambas fechas'); return; }
-      cargarVentas(d, h);
+      const d = document.getElementById('filtroDia').value;
+      if (!d) { alert('Selecciona un día'); return; }
+      cargarVentas(d);
     });
-    document.getElementById('btnLimpiar').addEventListener('click', () => { setFechasDefault(); cargarVentas(); });
+    document.getElementById('btnLimpiar').addEventListener('click', () => { setFechaDefault(); cargarVentas(document.getElementById('filtroDia').value); });
+    document.getElementById('filtroDia').addEventListener('change', function() {
+      if (this.value) cargarVentas(this.value);
+    });
 
-    setFechasDefault();
-    cargarReporte('hoy');
-    cargarVentas();
+    setFechaDefault();
+    cargarVentas(document.getElementById('filtroDia').value);
 
     document.getElementById('btnBorrarVentas').addEventListener('click', async () => {
       if (!confirm('¿Estás seguro de borrar TODAS las ventas?\n\nEsta acción no se puede deshacer.')) return;
@@ -270,7 +272,7 @@
         if (res.ok) {
           alert('Todas las ventas fueron eliminadas');
           cargarReporte('hoy');
-          cargarVentas();
+          cargarVentas(document.getElementById('filtroDia').value);
         } else {
           alert(data.error || 'Error al eliminar ventas');
         }
