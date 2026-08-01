@@ -262,7 +262,7 @@ async function confirmarCobro() {
     const res = await fetch(API + '/api/ventas', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ items })
+      body: JSON.stringify({ items, recibido, cambio })
     });
     const data = await res.json();
     if (!res.ok) { alert(data.error || 'Error al registrar venta'); return; }

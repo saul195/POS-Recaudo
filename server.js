@@ -1,6 +1,7 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 const initSqlJs = require('sql.js');
 const { execSync } = require('child_process');
 const net = require('net');
@@ -11,8 +12,17 @@ const PUBLIC_DIR = path.join(__dirname, 'public');
 const DB_PATH = path.join(__dirname, 'database.sqlite');
 const IS_WINDOWS = process.platform === 'win32';
 const IS_LINUX = process.platform === 'linux';
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'S@ul19505';
 
 let db;
+
+function checkPassword(given) {
+  if (typeof given !== 'string') return false;
+  const a = Buffer.from(given);
+  const b = Buffer.from(ADMIN_PASSWORD);
+  if (a.length !== b.length) return false;
+  return crypto.timingSafeEqual(a, b);
+}
 
 function saveDB() {
   const data = db.export();
@@ -216,6 +226,15 @@ function parseRow(result) {
   return rows.length ? rows[0] : null;
 }
 
+const MAX_NOMBRE_TICKET = 40;
+
+function acortarNombre(nombre, maxLen) {
+  if (typeof nombre !== 'string') nombre = String(nombre || '');
+  if (nombre.length <= maxLen) return nombre;
+  if (maxLen <= 3) return nombre.substring(0, maxLen);
+  return nombre.substring(0, maxLen - 3) + '...';
+}
+
 function generarTicket(data) {
   const NL = '\n';
   const W = 48;
@@ -224,7 +243,7 @@ function generarTicket(data) {
   t += '\x1B\x74\x10';
   t += '\x1B\x61\x01';
   t += '\x1B\x21\x18';
-  t += 'RECAUDO' + NL;
+  t += 'D´CHIQUIS' + NL;
   t += '\x1B\x21\x00';
   t += data.fecha + NL;
   t += 'Folio: #' + String(data.folio).padStart(4, '0') + NL;
@@ -232,11 +251,15 @@ function generarTicket(data) {
   t += '\x1B\x61\x00';
   t += '-'.repeat(W) + NL;
   for (const item of data.items) {
-    const name = item.producto_nombre;
+    let name = acortarNombre(item.producto_nombre, MAX_NOMBRE_TICKET);
     const qty = item.peso ? item.cantidad.toFixed(3) + 'kg' : 'x' + item.cantidad.toFixed(0);
     const sub = '$' + item.subtotal.toFixed(2);
+    const spaceLeft = Math.max(1, W - sub.length);
+    if (name.length + 1 + qty.length > spaceLeft) {
+      name = acortarNombre(item.producto_nombre, Math.max(1, spaceLeft - 1 - qty.length));
+    }
     const detail = name + ' ' + qty;
-    t += detail.padEnd(W - sub.length) + sub + NL;
+    t += detail.padEnd(spaceLeft) + sub + NL;
     if (item.peso) {
       const unitPrice = '$' + item.precio_unitario.toFixed(2) + '/kg';
       t += ('  @' + unitPrice).padEnd(W) + NL;
@@ -247,8 +270,10 @@ function generarTicket(data) {
   t += '\x1B\x45\x01';
   t += ('TOTAL: $' + data.total.toFixed(2)) + NL;
   t += '\x1B\x45\x00';
-  t += ('RECIBIDO: $' + data.recibido.toFixed(2)) + NL;
-  t += ('CAMBIO: $' + data.cambio.toFixed(2)) + NL;
+  const recibido = data.recibido ? data.recibido : data.total;
+  const cambio = data.cambio || 0;
+  t += ('RECIBIDO: $' + recibido.toFixed(2)) + NL;
+  t += ('CAMBIO: $' + cambio.toFixed(2)) + NL;
   t += '\x1B\x61\x00';
   t += '-'.repeat(W) + NL;
   t += '\x1B\x61\x01';
@@ -392,9 +417,12 @@ function handleVentas(req, res, url) {
   const method = req.method;
 
   if (method === 'DELETE' && url.pathname === '/api/ventas') {
-    db.run('DELETE FROM ventas');
-    saveDB();
-    sendJSON(res, 200, { ok: true, message: 'Todas las ventas fueron eliminadas' });
+    readBody(req).then(data => {
+      if (!checkPassword(data.password)) { sendJSON(res, 401, { error: 'Contraseña incorrecta' }); return; }
+      db.run('DELETE FROM ventas');
+      saveDB();
+      sendJSON(res, 200, { ok: true, message: 'Todas las ventas fueron eliminadas' });
+    }).catch(e => sendJSON(res, 400, { error: e.message }));
     return true;
   }
 
@@ -419,6 +447,22 @@ function handleVentas(req, res, url) {
     const parsed = rows.map(v => ({ ...v, items: JSON.parse(v.items) }));
     sendJSON(res, 200, parsed);
     return true;
+  }
+
+  const ventaIdMatch = url.pathname.match(/^\/api\/ventas\/(\d+)$/);
+  if (ventaIdMatch) {
+    if (method === 'DELETE') {
+      const id = parseInt(ventaIdMatch[1]);
+      readBody(req).then(data => {
+        if (!checkPassword(data.password)) { sendJSON(res, 401, { error: 'Contraseña incorrecta' }); return; }
+        const exResult = db.exec('SELECT id FROM ventas WHERE id = ' + id);
+        if (!exResult.length || !exResult[0].values.length) { sendJSON(res, 404, { error: 'Venta no encontrada' }); return; }
+        db.run('DELETE FROM ventas WHERE id = ?', [id]);
+        saveDB();
+        sendJSON(res, 200, { ok: true, message: 'Venta eliminada' });
+      }).catch(e => sendJSON(res, 400, { error: e.message }));
+      return true;
+    }
   }
 
   if (method === 'GET' && url.pathname === '/api/reportes') {
@@ -467,12 +511,14 @@ function handleVentas(req, res, url) {
       const folio = folioResult[0].values[0][0];
       const items = data.items.map(i => ({ ...i, subtotal: i.cantidad * i.precio_unitario }));
       const total = items.reduce((sum, i) => sum + i.subtotal, 0);
+      const recibido = data.recibido ? data.recibido : total;
+      const cambio = data.cambio || 0;
       const now = new Date().toLocaleString('es-MX');
-      db.run('INSERT INTO ventas (folio, total, items, created_at, fecha_venta) VALUES (?, ?, ?, ?, ?)', [folio, total, JSON.stringify(items), now, hoy]);
+      db.run('INSERT INTO ventas (folio, total, items, created_at, fecha_venta, recibido, cambio) VALUES (?, ?, ?, ?, ?, ?, ?)', [folio, total, JSON.stringify(items), now, hoy, recibido, cambio]);
       const ventaResult = db.exec('SELECT last_insert_rowid()');
       const id = ventaResult[0].values[0][0];
       saveDB();
-      sendJSON(res, 201, { id, folio, total, items, created_at: now });
+      sendJSON(res, 201, { id, folio, total, items, created_at: now, recibido, cambio });
     }).catch(e => sendJSON(res, 400, { error: e.message }));
     return true;
   }
@@ -507,10 +553,14 @@ async function start() {
       total REAL NOT NULL,
       items TEXT NOT NULL,
       created_at TEXT NOT NULL,
-      fecha_venta TEXT NOT NULL DEFAULT ''
+      fecha_venta TEXT NOT NULL DEFAULT '',
+      recibido REAL DEFAULT 0,
+      cambio REAL DEFAULT 0
     )
   `);
   try { db.run("ALTER TABLE ventas ADD COLUMN fecha_venta TEXT NOT NULL DEFAULT ''"); } catch(e) {}
+  try { db.run('ALTER TABLE ventas ADD COLUMN recibido REAL DEFAULT 0'); } catch(e) {}
+  try { db.run('ALTER TABLE ventas ADD COLUMN cambio REAL DEFAULT 0'); } catch(e) {}
   const oldSales = parseRows(db.exec("SELECT id, created_at FROM ventas WHERE fecha_venta = ''"));
   for (const s of oldSales) {
     const match = s.created_at.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);

@@ -66,7 +66,7 @@
       <div class="resumen-card"><div class="label">Ticket promedio</div><div class="value" id="histPromedio">$0.00</div></div>
     </div>
     <table>
-      <thead><tr><th>Folio</th><th>Fecha</th><th>Productos</th><th>Total</th></tr></thead>
+      <thead><tr><th>Folio</th><th>Fecha</th><th>Productos</th><th>Total</th><th>Acción</th></tr></thead>
       <tbody id="ventasBody"></tbody>
     </table>
     <button id="btnMasVentas" class="btn btn-secondary" style="display:none;margin-top:12px;width:100%">Cargar mas ventas</button>
@@ -227,7 +227,7 @@
       document.getElementById('ventasBody').innerHTML = mostrar.map(v => {
         total += v.total;
         const items = (v.items || []).map(i => i.producto_nombre + ' x' + (i.peso ? i.cantidad.toFixed(3) : i.cantidad.toFixed(0))).join(', ');
-        return `<tr><td data-label="Folio"><strong>#${String(v.folio).padStart(4,'0')}</strong></td><td data-label="Fecha">${v.created_at}</td><td data-label="Productos"><div class="detalle-items">${items || '—'}</div></td><td data-label="Total"><strong>${fmt(v.total)}</strong></td></tr>`;
+        return `<tr><td data-label="Folio"><strong>#${String(v.folio).padStart(4,'0')}</strong></td><td data-label="Fecha">${v.created_at}</td><td data-label="Productos"><div class="detalle-items">${items || '—'}</div></td><td data-label="Total"><strong>${fmt(v.total)}</strong></td><td data-label="Acción"><div class="actions"><button class="btn btn-secondary btn-sm btn-reimprimir-venta" data-id="${v.id}">Reimprimir</button><button class="btn btn-danger btn-sm btn-eliminar-venta" data-id="${v.id}" data-folio="${v.folio}">Eliminar</button></div></td></tr>`;
       }).join('');
       document.getElementById('histTotal').textContent = fmt(total);
       document.getElementById('histCantidad').textContent = mostrar.length;
@@ -238,6 +238,69 @@
     document.getElementById('btnMasVentas').addEventListener('click', () => {
       ventasMostradas += PAGE_SIZE;
       renderVentas();
+    });
+
+    document.getElementById('ventasBody').addEventListener('click', async (e) => {
+      const btnEliminar = e.target.closest('.btn-eliminar-venta');
+      if (btnEliminar) {
+        const id = btnEliminar.dataset.id;
+        const folio = btnEliminar.dataset.folio;
+        if (!confirm('¿Eliminar la venta #' + String(folio).padStart(4, '0') + '?\n\nEsta acción no se puede deshacer.')) return;
+        const password = prompt('Ingresa la contraseña de administrador para eliminar esta venta:');
+        if (password === null) return;
+        if (!password.trim()) { alert('La contraseña es obligatoria'); return; }
+        try {
+          const res = await fetch(API + '/api/ventas/' + id, {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ password })
+          });
+          const data = await res.json();
+          if (res.ok) {
+            alert('Venta eliminada');
+            cargarReporte('hoy');
+            cargarVentas(document.getElementById('filtroDia').value);
+          } else {
+            alert(data.error || 'Error al eliminar la venta');
+          }
+        } catch (err) {
+          alert('Error de conexión: ' + err.message);
+        }
+        return;
+      }
+
+      const btnReimprimir = e.target.closest('.btn-reimprimir-venta');
+      if (btnReimprimir) {
+        const config = JSON.parse(localStorage.getItem('printerConfig') || 'null');
+        if (!config || !config.nombre) { alert('No hay impresora configurada. Configúrala primero.'); return; }
+        const venta = todasVentas.find(v => String(v.id) === btnReimprimir.dataset.id);
+        if (!venta) { alert('Venta no encontrada'); return; }
+        try {
+          const res = await fetch(API + '/api/imprimir', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              printerName: config.nombre,
+              printerConnection: config.conexion,
+              printerIP: config.ip,
+              folio: venta.folio,
+              fecha: venta.created_at,
+              items: venta.items,
+              total: venta.total,
+              recibido: venta.recibido || venta.total,
+              cambio: venta.cambio || 0
+            })
+          });
+          if (res.ok) {
+            alert('Ticket reimpreso correctamente');
+          } else {
+            const data = await res.json();
+            alert('Error al reimprimir: ' + (data.error || 'Error desconocido'));
+          }
+        } catch (err) {
+          alert('Error de conexión: ' + err.message);
+        }
+      }
     });
 
     function cargarVentas(dia) {
@@ -266,8 +329,15 @@
     document.getElementById('btnBorrarVentas').addEventListener('click', async () => {
       if (!confirm('¿Estás seguro de borrar TODAS las ventas?\n\nEsta acción no se puede deshacer.')) return;
       if (!confirm('Última confirmación: Se eliminarán todas las ventas registradas.')) return;
+      const password = prompt('Ingresa la contraseña de administrador:');
+      if (password === null) return;
+      if (!password.trim()) { alert('La contraseña es obligatoria'); return; }
       try {
-        const res = await fetch(API + '/api/ventas', { method: 'DELETE' });
+        const res = await fetch(API + '/api/ventas', {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password })
+        });
         const data = await res.json();
         if (res.ok) {
           alert('Todas las ventas fueron eliminadas');
