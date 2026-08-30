@@ -2,7 +2,7 @@
 Name=POS Recaudo
 Comment=Sistema de punto de venta
 Exec=bash -c "cd %k && bash iniciar.sh"
-Icon=utilities-terminal
+Icon=/home/saullo/Desktop/POS-Recaudo/icon.png
 Terminal=true
 Type=Application
 Categories=Office;Finance;

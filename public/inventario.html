@@ -43,7 +43,7 @@
     </div>
     <table>
       <thead>
-        <tr><th>C&oacute;digo</th><th>Nombre</th><th>Categor&iacute;a</th><th>Precio</th><th>Tipo</th><th>Acciones</th></tr>
+        <tr><th>C&oacute;digo</th><th>Nombre</th><th>Categor&iacute;a</th><th>Precio</th><th>Stock</th><th>Tipo</th><th>Acciones</th></tr>
       </thead>
       <tbody id="invBody"></tbody>
     </table>
@@ -68,6 +68,12 @@
         <div class="full"><label>Nombre</label><input type="text" id="formNombre" placeholder="Nombre del producto"></div>
         <div><label>Precio actual</label><input type="number" id="formPrecioActual" step="0.01" min="0" readonly style="background:#f0f0f0;cursor:not-allowed"></div>
         <div><label>Nuevo precio</label><input type="number" id="formPrecio" step="0.01" min="0" placeholder="0.00"></div>
+        <div><label>Stock actual</label><input type="number" id="formStockActual" step="0.001" min="0" readonly style="background:#f0f0f0;cursor:not-allowed"></div>
+        <div>
+          <label>Stock a agregar</label>
+          <input type="number" id="formStockAgregar" step="0.001" min="0" placeholder="0">
+          <div id="stockResultado" style="font-size:0.8rem;color:var(--text-light);margin-top:4px"></div>
+        </div>
         <div class="full checkbox-group">
           <input type="checkbox" id="formRequierePeso">
           <label>Requiere peso (frutas/verduras)</label>
@@ -121,6 +127,7 @@
           <td data-label="Nombre"><strong>${p.nombre}</strong></td>
           <td data-label="Categoría">${p.categoria || '-'}</td>
           <td data-label="Precio">${fmt(p.precio)}</td>
+          <td data-label="Stock">${p.requiere_peso ? (p.stock || 0) + ' kg' : ((p.stock || 0) % 1 === 0 ? (p.stock || 0) : (p.stock || 0).toFixed(3)) + ' uds'}</td>
           <td data-label="Tipo">${p.requiere_peso ? '<span class="badge">Por peso</span>' : 'Unidad'}</td>
           <td data-label="" class="actions">
             <button class="btn btn-secondary btn-sm" onclick="editar(${p.id})">Editar</button>
@@ -138,9 +145,19 @@
       document.getElementById('formCategoria').value = p ? (p.categoria || '') : '';
       document.getElementById('formPrecioActual').value = p ? p.precio : '';
       document.getElementById('formPrecio').value = p ? p.precio : '';
+      document.getElementById('formStockActual').value = p ? (p.stock || 0) : 0;
+      document.getElementById('formStockAgregar').value = '';
+      document.getElementById('stockResultado').textContent = p ? ('Resultado: ' + (p.stock || 0)) : 'Resultado: 0';
       document.getElementById('formRequierePeso').checked = p ? !!p.requiere_peso : false;
       document.getElementById('modalProducto').classList.remove('hidden');
     }
+
+    document.getElementById('formStockAgregar').addEventListener('input', () => {
+      const actual = parseFloat(document.getElementById('formStockActual').value) || 0;
+      const sumar = parseFloat(document.getElementById('formStockAgregar').value) || 0;
+      const total = actual + sumar;
+      document.getElementById('stockResultado').textContent = 'Resultado: ' + (total % 1 === 0 ? total : total.toFixed(3));
+    });
 
     async function editar(id) {
       const res = await fetch(API + '/api/productos');
@@ -159,12 +176,15 @@
 
     document.getElementById('btnGuardar').addEventListener('click', async () => {
       const editId = document.getElementById('editId').value;
+      const stockActual = parseFloat(document.getElementById('formStockActual').value) || 0;
+      const stockAgregar = parseFloat(document.getElementById('formStockAgregar').value) || 0;
       const data = {
         codigo: document.getElementById('formCodigo').value || null,
         nombre: document.getElementById('formNombre').value,
         categoria: document.getElementById('formCategoria').value || null,
         precio: parseFloat(document.getElementById('formPrecio').value) || 0,
-        requiere_peso: document.getElementById('formRequierePeso').checked
+        requiere_peso: document.getElementById('formRequierePeso').checked,
+        stock: stockActual + stockAgregar
       };
       if (!data.nombre) { alert('El nombre es obligatorio'); return; }
 

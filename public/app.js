@@ -19,14 +19,20 @@ async function cargarProductos() {
 function renderProductos(lista) {
   const c = document.getElementById('productList');
   document.getElementById('productCount').textContent = lista.length;
-  c.innerHTML = lista.map(p => `
-    <div class="product-card" onclick="agregarTicket(${p.id})" title="${p.nombre}">
+  c.innerHTML = lista.map(p => {
+    const stock = p.stock || 0;
+    const agotado = stock <= 0;
+    const unidad = p.requiere_peso ? 'kg' : 'uds';
+    return `
+    <div class="product-card ${agotado ? 'agotado' : ''}" onclick="${agotado ? '' : 'agregarTicket(' + p.id + ')'}" title="${p.nombre}">
       <div class="nombre">${p.nombre}</div>
       ${p.categoria ? `<div class="categoria">${p.categoria}</div>` : ''}
       <div class="precio">${fmt(p.precio)}</div>
+      <div class="stock-badge ${agotado ? 'agotado' : ''}">${agotado ? 'AGOTADO' : 'Stock: ' + (stock % 1 === 0 ? stock : stock.toFixed(3)) + ' ' + unidad}</div>
       ${p.requiere_peso ? '<div class="peso-badge">Por peso</div>' : ''}
     </div>
-  `).join('');
+  `;
+  }).join('');
 }
 
 function actualizarTicket() {
@@ -37,7 +43,7 @@ function actualizarTicket() {
   let total = 0;
 
   c.innerHTML = ticket.map((item, i) => {
-    const subtotal = item.cantidad * item.precio;
+    const subtotal = Math.round(item.cantidad * item.precio);
     total += subtotal;
     return `
       <div class="ticket-item">
@@ -63,6 +69,9 @@ function cambiarCantidadTicket(i, val) {
   const n = parseFloat(val);
   if (isNaN(n) || n < 0) return;
   const item = ticket[i];
+  const p = productos.find(x => x.id === item.id);
+  const stock = p ? (p.stock || 0) : 0;
+  if (n > stock) { alert('Stock insuficiente de ' + item.nombre + ' (disponible: ' + stock + ')'); actualizarTicket(); return; }
   item.cantidad = n;
   if (item.peso) item.peso = n;
   actualizarTicket();
@@ -78,10 +87,13 @@ function agregarTicket(id) {
     abrirPesoModal(ticket.length - 1);
   } else {
     const exist = ticket.findIndex(x => x.id === p.id);
+    const actual = exist >= 0 ? ticket[exist].cantidad : 0;
+    const stock = p.stock || 0;
+    if (actual + 1 > stock) { alert('Stock insuficiente de ' + p.nombre + ' (disponible: ' + stock + ')'); return; }
     if (exist >= 0) {
       ticket[exist].cantidad += 1;
     } else {
-      ticket.push({ id: p.id, nombre: p.nombre, precio: p.precio, cantidad: 1, peso: null });
+      ticket.push({ id: p.id, nombre: p.nombre, precio: p.precio, cantidad: 1, peso: null, stock: p.stock || 0 });
     }
     actualizarTicket();
   }
@@ -91,15 +103,57 @@ function removerTicket(i) { ticket.splice(i, 1); actualizarTicket(); }
 
 let pesoEditIndex = -1;
 
+let pesoCampoActivo = 'peso';
+
 function abrirPesoModal(i) {
   pesoEditIndex = i;
   const item = ticket[i];
   document.getElementById('pesoProductoNombre').textContent = item.nombre;
   document.getElementById('pesoPrecioKg').textContent = fmt(item.precio);
   document.getElementById('pesoInput').value = '';
+  document.getElementById('pesoMonto').value = '';
+  pesoCampoActivo = 'peso';
+  actualizarPesoVista(true);
   document.getElementById('pesoModal').classList.remove('hidden');
   setTimeout(() => document.getElementById('pesoInput').focus(), 100);
 }
+
+function pesoPrecio() {
+  const item = ticket[pesoEditIndex];
+  return item ? item.precio : 0;
+}
+
+function actualizarPesoVista(soloVista) {
+  const pesoEl = document.getElementById('pesoInput');
+  const montoEl = document.getElementById('pesoMonto');
+  const vista = document.getElementById('pesoVista');
+  const precio = pesoPrecio();
+  const peso = parseFloat(pesoEl.value);
+  const monto = parseFloat(montoEl.value);
+
+  if (pesoCampoActivo === 'peso') {
+    if (peso > 0) {
+      const calcMonto = peso * precio;
+      if (!soloVista) montoEl.value = calcMonto.toFixed(2);
+      vista.textContent = peso.toFixed(3) + ' kg = ' + fmt(calcMonto);
+    } else {
+      vista.textContent = monto > 0 ? fmt(monto) + ' = ' + (monto / precio).toFixed(3) + ' kg' : '';
+    }
+  } else {
+    if (monto > 0) {
+      const calcPeso = monto / precio;
+      if (!soloVista) pesoEl.value = calcPeso.toFixed(3);
+      vista.textContent = fmt(monto) + ' = ' + calcPeso.toFixed(3) + ' kg';
+    } else {
+      vista.textContent = peso > 0 ? peso.toFixed(3) + ' kg = ' + fmt(peso * precio) : '';
+    }
+  }
+}
+
+document.getElementById('pesoInput').addEventListener('focus', () => { pesoCampoActivo = 'peso'; actualizarPesoVista(); });
+document.getElementById('pesoMonto').addEventListener('focus', () => { pesoCampoActivo = 'monto'; actualizarPesoVista(); });
+document.getElementById('pesoInput').addEventListener('input', () => { pesoCampoActivo = 'peso'; actualizarPesoVista(); });
+document.getElementById('pesoMonto').addEventListener('input', () => { pesoCampoActivo = 'monto'; actualizarPesoVista(); });
 
 function cerrarPesoModal() {
   document.getElementById('pesoModal').classList.add('hidden');
@@ -114,10 +168,14 @@ function cerrarPesoModal() {
 }
 
 document.getElementById('btnPesoConfirmar').addEventListener('click', () => {
+  actualizarPesoVista();
   const peso = parseFloat(document.getElementById('pesoInput').value);
-  if (!peso || peso <= 0) { alert('Ingresa un peso v\u00e1lido'); return; }
+  if (!peso || peso <= 0) { alert('Ingresa un peso v\u00e1lido o un monto en pesos'); return; }
   if (pesoEditIndex >= 0 && ticket[pesoEditIndex]) {
     const item = ticket[pesoEditIndex];
+    const p = productos.find(x => x.id === item.id);
+    const stock = p ? (p.stock || 0) : 0;
+    if (peso > stock) { alert('Stock insuficiente de ' + item.nombre + ' (disponible: ' + stock + ' kg)'); return; }
     item.peso = peso;
     item.cantidad = peso;
     document.getElementById('pesoModal').classList.add('hidden');
@@ -129,6 +187,10 @@ document.getElementById('btnPesoConfirmar').addEventListener('click', () => {
 document.getElementById('btnPesoCancelar').addEventListener('click', cerrarPesoModal);
 document.querySelector('.modal-close').addEventListener('click', cerrarPesoModal);
 document.getElementById('pesoInput').addEventListener('keydown', e => {
+  if (e.key === 'Enter') document.getElementById('btnPesoConfirmar').click();
+  if (e.key === 'Escape') cerrarPesoModal();
+});
+document.getElementById('pesoMonto').addEventListener('keydown', e => {
   if (e.key === 'Enter') document.getElementById('btnPesoConfirmar').click();
   if (e.key === 'Escape') cerrarPesoModal();
 });
@@ -255,6 +317,7 @@ async function confirmarCobro() {
   const cambio = recibido - cobroVentaPendiente.total;
   const items = cobroVentaPendiente.items;
   const total = cobroVentaPendiente.total;
+  const imprimir = document.getElementById('cobroImprimir').checked;
 
   cerrarCobroModal();
 
@@ -262,37 +325,39 @@ async function confirmarCobro() {
     const res = await fetch(API + '/api/ventas', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ items, recibido, cambio })
+      body: JSON.stringify({ items, total, recibido, cambio })
     });
     const data = await res.json();
     if (!res.ok) { alert(data.error || 'Error al registrar venta'); return; }
 
-    if (config && config.nombre) {
-      try {
-        const printRes = await fetch(API + '/api/imprimir', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            printerName: config.nombre,
-            printerConnection: config.conexion,
-            printerIP: config.ip,
-            folio: data.folio,
-            fecha: data.created_at,
-            items: data.items,
-            total: data.total,
-            recibido,
-            cambio
-          })
-        });
-        if (!printRes.ok) {
-          const err = await printRes.json();
-          alert('Venta registrada. Error al imprimir: ' + (err.error || 'Error desconocido'));
+    if (imprimir) {
+      if (config && config.nombre) {
+        try {
+          const printRes = await fetch(API + '/api/imprimir', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              printerName: config.nombre,
+              printerConnection: config.conexion,
+              printerIP: config.ip,
+              folio: data.folio,
+              fecha: data.created_at,
+              items: data.items,
+              total: data.total,
+              recibido,
+              cambio
+            })
+          });
+          if (!printRes.ok) {
+            const err = await printRes.json();
+            alert('Venta registrada. Error al imprimir: ' + (err.error || 'Error desconocido'));
+          }
+        } catch (e) {
+          alert('Venta registrada. Error de impresion: ' + e.message);
         }
-      } catch (e) {
-        alert('Venta registrada. Error de impresion: ' + e.message);
+      } else {
+        alert('Venta registrada. No hay impresora configurada.');
       }
-    } else {
-      alert('Venta registrada. No hay impresora configurada.');
     }
 
     ticket = [];
@@ -319,7 +384,8 @@ async function cobrar() {
   });
   if (sinPeso.length) { alert('Hay productos por peso sin asignar'); return; }
 
-  const total = items.reduce((sum, i) => sum + i.cantidad * i.precio_unitario, 0);
+  const totalParcial = items.reduce((sum, i) => sum + Math.round(i.cantidad * i.precio_unitario), 0);
+  const total = totalParcial;
   abrirCobroModal(total, items);
 }
 
@@ -335,12 +401,17 @@ searchInput.addEventListener('input', () => {
   const filtrados = productos.filter(p =>
     p.nombre.toLowerCase().includes(q) || (p.codigo && p.codigo.toLowerCase().includes(q))
   );
-  searchResults.innerHTML = filtrados.map(p => `
-    <div class="search-result-item" onclick="agregarTicket(${p.id}); searchInput.value=''; searchResults.classList.remove('visible');">
-      <div><div class="nombre">${p.nombre}</div>${p.codigo ? '<div class="codigo">'+p.codigo+'</div>' : ''}</div>
+  searchResults.innerHTML = filtrados.map(p => {
+    const stock = p.stock || 0;
+    const agotado = stock <= 0;
+    const unidad = p.requiere_peso ? 'kg' : 'uds';
+    return `
+    <div class="search-result-item ${agotado ? 'agotado' : ''}" ${agotado ? '' : 'onclick="agregarTicket(' + p.id + '); searchInput.value=\'\'; searchResults.classList.remove(\'visible\');"'} title="${p.nombre}">
+      <div><div class="nombre">${p.nombre}${agotado ? ' <span class="stock-agotado">AGOTADO</span>' : ' <span class="stock-info">Stock: ' + (stock % 1 === 0 ? stock : stock.toFixed(3)) + ' ' + unidad + '</span>'}</div>${p.codigo ? '<div class="codigo">'+p.codigo+'</div>' : ''}</div>
       <div class="precio">${fmt(p.precio)}</div>
     </div>
-  `).join('');
+  `;
+  }).join('');
   searchResults.classList.add('visible');
   renderProductos(filtrados);
 });

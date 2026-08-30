@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Reportes - Recaudo</title>
   <link rel="stylesheet" href="styles.css">
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+  <script src="chart.umd.min.js"></script>
 </head>
 <body>
   <header class="topbar">
@@ -225,9 +225,10 @@
       const mostrar = todasVentas.slice(0, ventasMostradas);
       let total = 0;
       document.getElementById('ventasBody').innerHTML = mostrar.map(v => {
-        total += v.total;
+        const vTotal = Math.round(v.total);
+        total += vTotal;
         const items = (v.items || []).map(i => i.producto_nombre + ' x' + (i.peso ? i.cantidad.toFixed(3) : i.cantidad.toFixed(0))).join(', ');
-        return `<tr><td data-label="Folio"><strong>#${String(v.folio).padStart(4,'0')}</strong></td><td data-label="Fecha">${v.created_at}</td><td data-label="Productos"><div class="detalle-items">${items || '—'}</div></td><td data-label="Total"><strong>${fmt(v.total)}</strong></td><td data-label="Acción"><div class="actions"><button class="btn btn-secondary btn-sm btn-reimprimir-venta" data-id="${v.id}">Reimprimir</button><button class="btn btn-danger btn-sm btn-eliminar-venta" data-id="${v.id}" data-folio="${v.folio}">Eliminar</button></div></td></tr>`;
+        return `<tr><td data-label="Folio"><strong>#${String(v.folio).padStart(4,'0')}</strong></td><td data-label="Fecha">${v.created_at}</td><td data-label="Productos"><div class="detalle-items">${items || '—'}</div></td><td data-label="Total"><strong>${fmt(vTotal)}</strong></td><td data-label="Acción"><div class="actions"><button class="btn btn-secondary btn-sm btn-reimprimir-venta" data-id="${v.id}">Reimprimir</button><button class="btn btn-danger btn-sm btn-eliminar-venta" data-id="${v.id}" data-folio="${v.folio}">Eliminar</button></div></td></tr>`;
       }).join('');
       document.getElementById('histTotal').textContent = fmt(total);
       document.getElementById('histCantidad').textContent = mostrar.length;

@@ -1,0 +1,8 @@
+[Desktop Entry]
+Name=Actualizar POS
+Comment=Descargar cambios del repositorio y actualizar dependencias
+Exec=bash -c "cd %k && bash actualizar.sh"
+Icon=/home/saullo/Desktop/POS-Recaudo/icon-actualizar.png
+Terminal=true
+Type=Application
+Categories=Office;Finance;

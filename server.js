@@ -68,15 +68,15 @@ function serveStatic(req, res) {
       if (err.code === 'ENOENT') {
         fs.readFile(path.join(PUBLIC_DIR, 'index.html'), (e2, d2) => {
           if (e2) { res.writeHead(404); res.end('Not found'); return; }
-          res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+          res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
           res.end(d2);
         });
       } else {
-        res.writeHead(500); res.end('Error interno');
+        res.writeHead(500, { 'Cache-Control': 'no-store' }); res.end('Error interno');
       }
       return;
     }
-    res.writeHead(200, { 'Content-Type': MIME_TYPES[ext] || 'application/octet-stream' });
+    res.writeHead(200, { 'Content-Type': MIME_TYPES[ext] || 'application/octet-stream', 'Cache-Control': 'no-store' });
     res.end(data);
   });
 }
@@ -125,8 +125,8 @@ function handleProductos(req, res, url) {
         if (dupCod.length && dupCod[0].values.length) { sendJSON(res, 409, { error: 'Ya existe un producto con ese código de barras' }); return; }
       }
       db.run(
-        'INSERT INTO productos (codigo, nombre, categoria, precio, requiere_peso) VALUES (?, ?, ?, ?, ?)',
-        [data.codigo || null, data.nombre.trim(), data.categoria || null, parseFloat(data.precio) || 0, data.requiere_peso ? 1 : 0]
+        'INSERT INTO productos (codigo, nombre, categoria, precio, requiere_peso, stock) VALUES (?, ?, ?, ?, ?, ?)',
+        [data.codigo || null, data.nombre.trim(), data.categoria || null, parseFloat(data.precio) || 0, data.requiere_peso ? 1 : 0, parseFloat(data.stock) || 0]
       );
       const lastId = db.exec('SELECT last_insert_rowid()')[0].values[0][0];
       const nuevo = db.exec('SELECT * FROM productos WHERE id = ' + lastId);
@@ -159,13 +159,14 @@ function handleProductos(req, res, url) {
           if (dupCod.length && dupCod[0].values.length) { sendJSON(res, 409, { error: 'Ya existe un producto con ese código de barras' }); return; }
         }
         db.run(
-          'UPDATE productos SET codigo = ?, nombre = ?, categoria = ?, precio = ?, requiere_peso = ? WHERE id = ?',
+          'UPDATE productos SET codigo = ?, nombre = ?, categoria = ?, precio = ?, requiere_peso = ?, stock = ? WHERE id = ?',
           [
             data.codigo !== undefined ? (data.codigo || null) : existing.codigo,
             data.nombre.trim(),
             data.categoria !== undefined ? (data.categoria || null) : existing.categoria,
             parseFloat(data.precio) || 0,
             data.requiere_peso !== undefined ? (data.requiere_peso ? 1 : 0) : existing.requiere_peso,
+            data.stock !== undefined ? (parseFloat(data.stock) || 0) : (existing.stock || 0),
             id
           ]
         );
@@ -201,8 +202,8 @@ function handleImport(req, res) {
       const dup = db.exec("SELECT id FROM productos WHERE LOWER(TRIM(nombre)) = LOWER(TRIM('" + item.nombre.trim().replace(/'/g, "''") + "'))");
       if (dup.length && dup[0].values.length) continue;
       db.run(
-        'INSERT INTO productos (codigo, nombre, categoria, precio, requiere_peso) VALUES (?, ?, ?, ?, ?)',
-        [item.codigo || null, item.nombre.trim(), item.categoria || null, parseFloat(item.precio) || 0, item.requiere_peso ? 1 : 0]
+        'INSERT INTO productos (codigo, nombre, categoria, precio, requiere_peso, stock) VALUES (?, ?, ?, ?, ?, ?)',
+        [item.codigo || null, item.nombre.trim(), item.categoria || null, parseFloat(item.precio) || 0, item.requiere_peso ? 1 : 0, parseFloat(item.stock) || 0]
       );
       count++;
     }
@@ -253,7 +254,7 @@ function generarTicket(data) {
   for (const item of data.items) {
     let name = acortarNombre(item.producto_nombre, MAX_NOMBRE_TICKET);
     const qty = item.peso ? item.cantidad.toFixed(3) + 'kg' : 'x' + item.cantidad.toFixed(0);
-    const sub = '$' + item.subtotal.toFixed(2);
+    const sub = '$' + Math.round(item.subtotal !== undefined ? item.subtotal : item.cantidad * item.precio_unitario).toFixed(2);
     const spaceLeft = Math.max(1, W - sub.length);
     if (name.length + 1 + qty.length > spaceLeft) {
       name = acortarNombre(item.producto_nombre, Math.max(1, spaceLeft - 1 - qty.length));
@@ -268,7 +269,7 @@ function generarTicket(data) {
   t += '-'.repeat(W) + NL;
   t += '\x1B\x61\x02';
   t += '\x1B\x45\x01';
-  t += ('TOTAL: $' + data.total.toFixed(2)) + NL;
+  t += ('TOTAL: $' + Math.round(data.total).toFixed(2)) + NL;
   t += '\x1B\x45\x00';
   const recibido = data.recibido ? data.recibido : data.total;
   const cambio = data.cambio || 0;
@@ -483,13 +484,13 @@ function handleVentas(req, res, url) {
     let totalIngresos = 0;
     const productoMap = {};
     for (const v of ventas) {
-      totalIngresos += v.total;
+      totalIngresos += Math.round(v.total || 0);
       const items = JSON.parse(v.items);
       for (const it of items) {
         const key = it.producto_nombre;
         if (!productoMap[key]) productoMap[key] = { nombre: key, cantidad: 0, ingresos: 0 };
         productoMap[key].cantidad += it.cantidad;
-        productoMap[key].ingresos += it.subtotal;
+        productoMap[key].ingresos += Math.round(it.subtotal || it.cantidad * it.precio_unitario || 0);
       }
     }
     const productos = Object.values(productoMap).sort((a, b) => b.ingresos - a.ingresos);
@@ -502,21 +503,33 @@ function handleVentas(req, res, url) {
       if (!data.items || !Array.isArray(data.items) || data.items.length === 0) {
         sendJSON(res, 400, { error: 'La venta debe tener al menos un item' }); return;
       }
+      const prods = [];
       for (const item of data.items) {
         const prod = parseRow(db.exec('SELECT * FROM productos WHERE id = ' + item.producto_id));
         if (!prod) { sendJSON(res, 400, { error: 'Producto no encontrado: ' + item.producto_id }); return; }
+        const cant = item.cantidad || 0;
+        const stock = prod.stock || 0;
+        if (cant > stock) {
+          sendJSON(res, 400, { error: 'Stock insuficiente para: ' + prod.nombre + ' (disponible: ' + stock + ')' }); return;
+        }
+        prods.push({ prod, cant });
       }
       const hoy = fechaLocal();
       const folioResult = db.exec("SELECT COALESCE(MAX(folio), 0) + 1 AS folio FROM ventas WHERE fecha_venta = '" + hoy + "'");
       const folio = folioResult[0].values[0][0];
-      const items = data.items.map(i => ({ ...i, subtotal: i.cantidad * i.precio_unitario }));
-      const total = items.reduce((sum, i) => sum + i.subtotal, 0);
+      const items = data.items.map(i => ({ ...i, subtotal: Math.round(i.cantidad * i.precio_unitario) }));
+      const total = data.total !== undefined && !isNaN(Number(data.total))
+        ? Math.round(Number(data.total))
+        : Math.round(items.reduce((sum, i) => sum + i.subtotal, 0));
       const recibido = data.recibido ? data.recibido : total;
       const cambio = data.cambio || 0;
       const now = new Date().toLocaleString('es-MX');
       db.run('INSERT INTO ventas (folio, total, items, created_at, fecha_venta, recibido, cambio) VALUES (?, ?, ?, ?, ?, ?, ?)', [folio, total, JSON.stringify(items), now, hoy, recibido, cambio]);
       const ventaResult = db.exec('SELECT last_insert_rowid()');
       const id = ventaResult[0].values[0][0];
+      for (const { prod, cant } of prods) {
+        db.run('UPDATE productos SET stock = stock - ? WHERE id = ?', [cant, prod.id]);
+      }
       saveDB();
       sendJSON(res, 201, { id, folio, total, items, created_at: now, recibido, cambio });
     }).catch(e => sendJSON(res, 400, { error: e.message }));
@@ -543,9 +556,11 @@ async function start() {
       nombre TEXT NOT NULL UNIQUE,
       categoria TEXT,
       precio REAL DEFAULT 0,
-      requiere_peso INTEGER DEFAULT 0
+      requiere_peso INTEGER DEFAULT 0,
+      stock REAL DEFAULT 0
     )
   `);
+  try { db.run('ALTER TABLE productos ADD COLUMN stock REAL DEFAULT 0'); } catch(e) {}
   db.run(`
     CREATE TABLE IF NOT EXISTS ventas (
       id INTEGER PRIMARY KEY AUTOINCREMENT,

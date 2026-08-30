@@ -53,7 +53,12 @@
       <h3>Asignar peso</h3>
       <p>Producto: <strong id="pesoProductoNombre"></strong></p>
       <p style="font-size:0.85rem;color:var(--text-light);margin-top:-8px;margin-bottom:12px">Precio por kg: <strong id="pesoPrecioKg"></strong></p>
-      <input type="number" id="pesoInput" step="0.001" min="0.001" placeholder="Peso en kg">
+      <label style="font-size:0.85rem;color:var(--text-light);display:block;margin-bottom:4px">Peso en kg</label>
+      <input type="number" id="pesoInput" step="0.001" min="0" placeholder="Ej: 0.500">
+      <div style="text-align:center;color:var(--text-light);margin:6px 0;font-size:0.9rem">— o —</div>
+      <label style="font-size:0.85rem;color:var(--text-light);display:block;margin-bottom:4px">Monto en pesos</label>
+      <input type="number" id="pesoMonto" step="0.01" min="0" placeholder="Ej: 20">
+      <div id="pesoVista" style="font-size:0.9rem;color:var(--primary);font-weight:600;margin-top:10px;text-align:center"></div>
       <div class="modal-buttons">
         <button id="btnPesoConfirmar" class="btn btn-primary">Confirmar</button>
         <button id="btnPesoCancelar" class="btn btn-secondary">Cancelar</button>
@@ -162,8 +167,12 @@
         <span id="cobroCambioDisplay" style="font-size:1.4rem;font-weight:700;color:var(--primary)">$0.00</span>
       </div>
       <div id="cobroError" style="color:var(--danger);font-size:0.85rem;margin-top:8px;display:none">El dinero recibido debe ser mayor o igual al total</div>
+      <label class="campo-inline" style="display:flex;align-items:center;gap:8px;justify-content:center;margin-top:14px;font-size:0.95rem;cursor:pointer">
+        <input type="checkbox" id="cobroImprimir" style="width:18px;height:18px;accent-color:var(--primary)">
+        Imprimir ticket
+      </label>
       <div class="modal-buttons" style="margin-top:16px">
-        <button id="btnCobroConfirmar" class="btn btn-primary" disabled>Imprimir y cobrar</button>
+        <button id="btnCobroConfirmar" class="btn btn-primary" disabled>Cobrar</button>
         <button id="btnCobroCancelar" class="btn btn-secondary">Cancelar</button>
       </div>
     </div>
