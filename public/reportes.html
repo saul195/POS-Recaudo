@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Reportes - Recaudo</title>
   <link rel="stylesheet" href="styles.css">
+  <script src="ui.js"></script>
   <script src="chart.umd.min.js"></script>
 </head>
 <body>
@@ -33,6 +34,18 @@
       <div class="resumen-card"><div class="label">Productos vendidos</div><div class="value" id="repUnidades">0</div></div>
     </div>
 
+    <div class="chart-box" style="margin:16px 0">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
+        <h3 style="margin:0">Ventas por mes</h3>
+        <div style="display:flex;align-items:center;gap:8px">
+          <label for="chartAnio" style="font-size:0.85rem;color:var(--text-light)">Año</label>
+          <select id="chartAnio" style="padding:6px 12px;border:2px solid var(--border);border-radius:var(--radius);font-size:0.9rem;background:var(--card);color:var(--text);font-weight:600"></select>
+        </div>
+      </div>
+      <div class="rango-info" id="chartMesInfo" style="margin:10px 0 4px"></div>
+      <canvas id="chartMes" style="max-height:320px"></canvas>
+    </div>
+
     <div class="chart-grid">
       <div class="chart-box">
         <h3>Top 10 ingresos por producto</h3>
@@ -54,7 +67,7 @@
     </table>
     <button id="btnMasProductos" class="btn btn-secondary" style="display:none;margin-top:12px;width:100%">Ver mas productos</button>
 
-    <div class="page-header" style="margin-top:32px"><h2>Historial de ventas</h2></div>
+    <div class="page-header" id="historialHeader" style="margin-top:32px"><h2>Historial de ventas</h2></div>
     <div class="filtros">
       <div class="campo"><label>Día</label><input type="date" id="filtroDia"></div>
       <button id="btnFiltrar" class="btn btn-primary">Filtrar</button>
@@ -79,17 +92,17 @@
   </main>
 
   <style>
-    .btn-periodo{background:#e9ecef;color:var(--text);border:none;border-radius:var(--radius);padding:10px 20px;font-size:0.95rem;font-weight:600;cursor:pointer;transition:all 0.2s}
+    .btn-periodo{background:var(--panel);color:var(--text);border:none;border-radius:var(--radius);padding:10px 20px;font-size:0.95rem;font-weight:600;cursor:pointer;transition:all 0.2s}
     .btn-periodo.active{background:var(--primary);color:white}
-    .btn-periodo:hover:not(.active){background:#dee2e6}
+    .btn-periodo:hover:not(.active){background:var(--border)}
     .rank-num{width:28px;height:28px;border-radius:50%;background:var(--primary);color:white;display:inline-flex;align-items:center;justify-content:center;font-size:0.8rem;font-weight:700}
-    .rank-num.r2{background:#6c757d}
-    .rank-num.r3{background:#adb5bd}
+    .rank-num.r2{background:var(--text-light)}
+    .rank-num.r3{background:var(--text-faint)}
     .chart-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:16px 0}
-    .chart-box{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);padding:20px}
+    .chart-box{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);padding:20px;border:1px solid var(--border)}
     .chart-box h3{font-size:0.95rem;color:var(--text-light);margin:0 0 12px}
     .btn-danger{background:var(--danger);color:white;border:none;border-radius:var(--radius);padding:10px 20px;font-size:0.95rem;font-weight:600;cursor:pointer;transition:all 0.2s}
-    .btn-danger:hover{background:#c1121f}
+    .btn-danger:hover{background:#B73630}
     @media(max-width:768px){.chart-grid{grid-template-columns:1fr}}
   </style>
 
@@ -101,7 +114,7 @@
     const TOP_CHART = 10;
     const PAGE_SIZE = 50;
 
-    const colores = ['#2d6a4f','#40916c','#52b788','#74c69d','#95d5b2','#b7e4c7','#d8f3dc','#ffb703','#fb8500','#e63946'];
+    const colores = ['#2E9E44','#3FB457','#8FD49A','#A5D6A7','#B7E4C7','#D8F3DC','#F2C14E','#F2814D','#E8752F','#D6453D'];
 
     function renderCharts(productos) {
       if (chartIngresosInstance) chartIngresosInstance.destroy();
@@ -146,6 +159,58 @@
           plugins: { legend: { position: 'bottom', labels: { font: { size: 11 }, padding: 8 } } }
         }
       });
+    }
+
+    let chartMesInstance = null;
+
+    function poblarAnios() {
+      const actual = new Date().getFullYear();
+      const sel = document.getElementById('chartAnio');
+      let html = '';
+      for (let a = actual; a >= actual - 5; a--) html += '<option value="' + a + '">' + a + '</option>';
+      sel.innerHTML = html;
+    }
+
+    async function cargarMensual(anio) {
+      const [res, resPrev] = await Promise.all([
+        fetch(API + '/api/reportes/mensual?anio=' + anio),
+        fetch(API + '/api/reportes/mensual?anio=' + (anio - 1))
+      ]);
+      const data = await res.json();
+      const prev = await resPrev.json();
+      if (chartMesInstance) chartMesInstance.destroy();
+      const coloresMes = data.meses.map((m, i) => i === new Date().getMonth() && anio === new Date().getFullYear() ? '#2E9E44' : '#8FD49A');
+      chartMesInstance = new Chart(document.getElementById('chartMes'), {
+        type: 'bar',
+        data: {
+          labels: data.meses.map(m => m.etiqueta),
+          datasets: [{ label: 'Ingresos ($)', data: data.meses.map(m => m.ingresos), backgroundColor: coloresMes, borderRadius: 6 }]
+        },
+        options: {
+          responsive: true,
+          plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => fmt(ctx.parsed.y) + ' · ' + data.meses[ctx.dataIndex].ventas + ' ventas' } } },
+          scales: { y: { beginAtZero: true, ticks: { callback: v => '$' + v } } },
+          onClick: (evt, els) => { if (els.length) verMesHistorial(anio, els[0].index); }
+        }
+      });
+      let varTxt = '';
+      if (prev.totalIngresos > 0) {
+        const pct = ((data.totalIngresos - prev.totalIngresos) / prev.totalIngresos) * 100;
+        const cls = pct >= 0 ? 'variacion-pos' : 'variacion-neg';
+        varTxt = ' · <span class="' + cls + '">' + (pct >= 0 ? '+' : '') + pct.toFixed(1) + '% vs ' + (anio - 1) + '</span>';
+      }
+      document.getElementById('chartMesInfo').innerHTML = 'Año ' + anio + ' · Total ' + fmt(data.totalIngresos) + ' en ' + data.totalVentas + ' ventas' + varTxt + ' · haz clic en un mes para ver el historial';
+    }
+
+    function verMesHistorial(anio, i) {
+      const mes = i + 1;
+      const mm = String(mes).padStart(2, '0');
+      const ultimo = new Date(anio, mes, 0).getDate();
+      const desde = anio + '-' + mm + '-01';
+      const hasta = anio + '-' + mm + '-' + String(ultimo).padStart(2, '0');
+      cargarVentas(desde, hasta);
+      document.getElementById('historialHeader').scrollIntoView({ behavior: 'smooth', block: 'start' });
+      toastInfo('Mostrando ventas de ' + ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'][i] + ' ' + anio);
     }
 
     let todosProductos = [];
@@ -249,7 +314,7 @@
         if (!confirm('¿Eliminar la venta #' + String(folio).padStart(4, '0') + '?\n\nEsta acción no se puede deshacer.')) return;
         const password = prompt('Ingresa la contraseña de administrador para eliminar esta venta:');
         if (password === null) return;
-        if (!password.trim()) { alert('La contraseña es obligatoria'); return; }
+        if (!password.trim()) { toastWarning('La contraseña es obligatoria'); return; }
         try {
           const res = await fetch(API + '/api/ventas/' + id, {
             method: 'DELETE',
@@ -258,14 +323,14 @@
           });
           const data = await res.json();
           if (res.ok) {
-            alert('Venta eliminada');
+            toastSuccess('Venta eliminada');
             cargarReporte('hoy');
             cargarVentas(document.getElementById('filtroDia').value);
           } else {
-            alert(data.error || 'Error al eliminar la venta');
+            toastError(data.error || 'Error al eliminar la venta');
           }
         } catch (err) {
-          alert('Error de conexión: ' + err.message);
+          toastError('Error de conexión: ' + err.message);
         }
         return;
       }
@@ -273,9 +338,9 @@
       const btnReimprimir = e.target.closest('.btn-reimprimir-venta');
       if (btnReimprimir) {
         const config = JSON.parse(localStorage.getItem('printerConfig') || 'null');
-        if (!config || !config.nombre) { alert('No hay impresora configurada. Configúrala primero.'); return; }
+        if (!config || !config.nombre) { toastWarning('No hay impresora configurada. Configúrala primero.'); return; }
         const venta = todasVentas.find(v => String(v.id) === btnReimprimir.dataset.id);
-        if (!venta) { alert('Venta no encontrada'); return; }
+        if (!venta) { toastError('Venta no encontrada'); return; }
         try {
           const res = await fetch(API + '/api/imprimir', {
             method: 'POST',
@@ -293,20 +358,20 @@
             })
           });
           if (res.ok) {
-            alert('Ticket reimpreso correctamente');
+            toastSuccess('Ticket reimpreso correctamente');
           } else {
             const data = await res.json();
-            alert('Error al reimprimir: ' + (data.error || 'Error desconocido'));
+            toastError('Error al reimprimir: ' + (data.error || 'Error desconocido'));
           }
         } catch (err) {
-          alert('Error de conexión: ' + err.message);
+          toastError('Error de conexión: ' + err.message);
         }
       }
     });
 
-    function cargarVentas(dia) {
+    function cargarVentas(dia, hasta) {
       let url = API + '/api/ventas';
-      if (dia) url += '?desde=' + encodeURIComponent(dia) + '&hasta=' + encodeURIComponent(dia);
+      if (dia) url += '?desde=' + encodeURIComponent(dia) + '&hasta=' + encodeURIComponent(hasta || dia);
       fetch(url).then(res => res.json()).then(data => {
         todasVentas = data.reverse();
         ventasMostradas = PAGE_SIZE;
@@ -316,7 +381,7 @@
 
     document.getElementById('btnFiltrar').addEventListener('click', () => {
       const d = document.getElementById('filtroDia').value;
-      if (!d) { alert('Selecciona un día'); return; }
+      if (!d) { toastWarning('Selecciona un día'); return; }
       cargarVentas(d);
     });
     document.getElementById('btnLimpiar').addEventListener('click', () => { setFechaDefault(); cargarVentas(document.getElementById('filtroDia').value); });
@@ -324,15 +389,19 @@
       if (this.value) cargarVentas(this.value);
     });
 
+    document.getElementById('chartAnio').addEventListener('change', function() { cargarMensual(parseInt(this.value, 10)); });
+
     setFechaDefault();
     cargarVentas(document.getElementById('filtroDia').value);
+    poblarAnios();
+    cargarMensual(new Date().getFullYear());
 
     document.getElementById('btnBorrarVentas').addEventListener('click', async () => {
       if (!confirm('¿Estás seguro de borrar TODAS las ventas?\n\nEsta acción no se puede deshacer.')) return;
       if (!confirm('Última confirmación: Se eliminarán todas las ventas registradas.')) return;
       const password = prompt('Ingresa la contraseña de administrador:');
       if (password === null) return;
-      if (!password.trim()) { alert('La contraseña es obligatoria'); return; }
+      if (!password.trim()) { toastWarning('La contraseña es obligatoria'); return; }
       try {
         const res = await fetch(API + '/api/ventas', {
           method: 'DELETE',
@@ -341,14 +410,14 @@
         });
         const data = await res.json();
         if (res.ok) {
-          alert('Todas las ventas fueron eliminadas');
+          toastSuccess('Todas las ventas fueron eliminadas');
           cargarReporte('hoy');
           cargarVentas(document.getElementById('filtroDia').value);
         } else {
-          alert(data.error || 'Error al eliminar ventas');
+          toastError(data.error || 'Error al eliminar ventas');
         }
       } catch (e) {
-        alert('Error de conexión: ' + e.message);
+        toastError('Error de conexión: ' + e.message);
       }
     });
   </script>

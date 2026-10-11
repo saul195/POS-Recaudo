@@ -71,7 +71,7 @@ function cambiarCantidadTicket(i, val) {
   const item = ticket[i];
   const p = productos.find(x => x.id === item.id);
   const stock = p ? (p.stock || 0) : 0;
-  if (n > stock) { alert('Stock insuficiente de ' + item.nombre + ' (disponible: ' + stock + ')'); actualizarTicket(); return; }
+  if (n > stock) { toastWarning('Stock insuficiente de ' + item.nombre + ' (disponible: ' + stock + ')'); actualizarTicket(); return; }
   item.cantidad = n;
   if (item.peso) item.peso = n;
   actualizarTicket();
@@ -89,7 +89,7 @@ function agregarTicket(id) {
     const exist = ticket.findIndex(x => x.id === p.id);
     const actual = exist >= 0 ? ticket[exist].cantidad : 0;
     const stock = p.stock || 0;
-    if (actual + 1 > stock) { alert('Stock insuficiente de ' + p.nombre + ' (disponible: ' + stock + ')'); return; }
+    if (actual + 1 > stock) { toastWarning('Stock insuficiente de ' + p.nombre + ' (disponible: ' + stock + ')'); return; }
     if (exist >= 0) {
       ticket[exist].cantidad += 1;
     } else {
@@ -170,12 +170,12 @@ function cerrarPesoModal() {
 document.getElementById('btnPesoConfirmar').addEventListener('click', () => {
   actualizarPesoVista();
   const peso = parseFloat(document.getElementById('pesoInput').value);
-  if (!peso || peso <= 0) { alert('Ingresa un peso v\u00e1lido o un monto en pesos'); return; }
+  if (!peso || peso <= 0) { toastWarning('Ingresa un peso v\u00e1lido o un monto en pesos'); return; }
   if (pesoEditIndex >= 0 && ticket[pesoEditIndex]) {
     const item = ticket[pesoEditIndex];
     const p = productos.find(x => x.id === item.id);
     const stock = p ? (p.stock || 0) : 0;
-    if (peso > stock) { alert('Stock insuficiente de ' + item.nombre + ' (disponible: ' + stock + ' kg)'); return; }
+    if (peso > stock) { toastWarning('Stock insuficiente de ' + item.nombre + ' (disponible: ' + stock + ' kg)'); return; }
     item.peso = peso;
     item.cantidad = peso;
     document.getElementById('pesoModal').classList.add('hidden');
@@ -245,8 +245,8 @@ async function agregarProductoRapido() {
   const precio = parseFloat(document.getElementById('bcPrecio').value);
   const requiere_peso = document.getElementById('bcPeso').checked ? 1 : 0;
 
-  if (!nombre) { alert('Ingresa el nombre del producto'); return; }
-  if (isNaN(precio) || precio < 0) { alert('Ingresa un precio válido'); return; }
+  if (!nombre) { toastWarning('Ingresa el nombre del producto'); return; }
+  if (isNaN(precio) || precio < 0) { toastWarning('Ingresa un precio válido'); return; }
 
   try {
     const res = await fetch(API + '/api/productos', {
@@ -255,14 +255,14 @@ async function agregarProductoRapido() {
       body: JSON.stringify({ codigo: barcodeScannedCode, nombre, categoria, precio, requiere_peso })
     });
     const data = await res.json();
-    if (!res.ok) { alert(data.error || 'Error al crear producto'); return; }
+    if (!res.ok) { toastError(data.error || 'Error al crear producto'); return; }
 
     await cargarProductos();
     agregarTicket(data.id);
     mostrarBarcodeToast('Agregado: ' + nombre);
     cerrarBarcodeModal();
   } catch (e) {
-    alert('Error de conexión: ' + e.message);
+    toastError('Error de conexión: ' + e.message);
   }
 }
 
@@ -272,12 +272,28 @@ document.getElementById('barcodeModal').addEventListener('click', e => {
 
 let cobroVentaPendiente = null;
 
+function renderCashButtons(total) {
+  const cont = document.getElementById('cashButtons');
+  const bills = [20, 50, 100, 200, 500, 1000];
+  const exacto = Math.ceil(total);
+  let html = `<button type="button" class="btn btn-secondary tooltip-btn cash-btn-exact" data-cash="${exacto}">Exacto ${fmt(exacto)}</button>`;
+  html += bills.filter(b => b >= total).slice(0, 5).map(b => `<button type="button" class="btn btn-secondary" data-cash="${b}">${fmt(b)}</button>`).join('');
+  cont.innerHTML = html;
+  cont.querySelectorAll('[data-cash]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.getElementById('cobroRecibido').value = btn.dataset.cash;
+      calcularCambio();
+    });
+  });
+}
+
 function abrirCobroModal(total, items) {
   cobroVentaPendiente = { total, items };
   document.getElementById('cobroTotalDisplay').textContent = fmt(total);
   document.getElementById('cobroRecibido').value = '';
   document.getElementById('cobroCambioDisplay').textContent = '$0.00';
   document.getElementById('cobroError').style.display = 'none';
+  renderCashButtons(total);
   document.getElementById('cobroModal').classList.remove('hidden');
   setTimeout(() => document.getElementById('cobroRecibido').focus(), 100);
 }
@@ -328,7 +344,7 @@ async function confirmarCobro() {
       body: JSON.stringify({ items, total, recibido, cambio })
     });
     const data = await res.json();
-    if (!res.ok) { alert(data.error || 'Error al registrar venta'); return; }
+    if (!res.ok) { toastError(data.error || 'Error al registrar venta'); return; }
 
     if (imprimir) {
       if (config && config.nombre) {
@@ -350,13 +366,13 @@ async function confirmarCobro() {
           });
           if (!printRes.ok) {
             const err = await printRes.json();
-            alert('Venta registrada. Error al imprimir: ' + (err.error || 'Error desconocido'));
+            toastWarning('Venta registrada. Error al imprimir: ' + (err.error || 'Error desconocido'));
           }
         } catch (e) {
-          alert('Venta registrada. Error de impresion: ' + e.message);
+          toastWarning('Venta registrada. Error de impresion: ' + e.message);
         }
       } else {
-        alert('Venta registrada. No hay impresora configurada.');
+        toastWarning('Venta registrada. No hay impresora configurada.');
       }
     }
 
@@ -364,8 +380,9 @@ async function confirmarCobro() {
     actualizarTicket();
     await cargarProductos();
     document.getElementById('folioDisplay').textContent = String(data.folio + 1).padStart(3, '0');
+    toastSuccess('Venta #' + String(data.folio).padStart(4, '0') + ' registrada');
   } catch (e) {
-    alert('Error de conexion: ' + e.message);
+    toastError('Error de conexion: ' + e.message);
   }
 }
 
@@ -382,7 +399,7 @@ async function cobrar() {
     const p = productos.find(pr => pr.id === x.producto_id);
     return p && p.requiere_peso && !x.peso;
   });
-  if (sinPeso.length) { alert('Hay productos por peso sin asignar'); return; }
+  if (sinPeso.length) { toastWarning('Hay productos por peso sin asignar'); return; }
 
   const totalParcial = items.reduce((sum, i) => sum + Math.round(i.cantidad * i.precio_unitario), 0);
   const total = totalParcial;
@@ -395,12 +412,49 @@ document.getElementById('btnLimpiar').addEventListener('click', () => { ticket =
 const searchInput = document.getElementById('searchInput');
 const searchResults = document.getElementById('searchResults');
 
+let searchFiltered = [];
+let searchIndex = -1;
+
+function resaltarResultado(nuevoIdx) {
+  const items = searchResults.querySelectorAll('.search-result-item');
+  if (searchIndex >= 0 && items[searchIndex]) items[searchIndex].classList.remove('active');
+  searchIndex = nuevoIdx;
+  if (searchIndex >= 0 && items[searchIndex]) {
+    items[searchIndex].classList.add('active');
+    items[searchIndex].scrollIntoView({ block: 'nearest' });
+  }
+}
+
+function moverSeleccion(delta) {
+  if (!searchFiltered.length) return;
+  let idx = searchIndex;
+  for (let i = 0; i < searchFiltered.length; i++) {
+    idx += delta;
+    if (idx < 0) idx = searchFiltered.length - 1;
+    if (idx >= searchFiltered.length) idx = 0;
+    if ((searchFiltered[idx].stock || 0) > 0) { resaltarResultado(idx); return; }
+  }
+}
+
+function agregarSeleccionado() {
+  if (searchIndex < 0 || !searchFiltered[searchIndex]) return false;
+  const p = searchFiltered[searchIndex];
+  agregarTicket(p.id);
+  searchInput.value = '';
+  searchResults.classList.remove('visible');
+  renderProductos(productosSinCodigo());
+  searchIndex = -1;
+  return true;
+}
+
 searchInput.addEventListener('input', () => {
   const q = searchInput.value.trim().toLowerCase();
+  searchIndex = -1;
   if (!q) { searchResults.classList.remove('visible'); renderProductos(productosSinCodigo()); return; }
   const filtrados = productos.filter(p =>
     p.nombre.toLowerCase().includes(q) || (p.codigo && p.codigo.toLowerCase().includes(q))
   );
+  searchFiltered = filtrados;
   searchResults.innerHTML = filtrados.map(p => {
     const stock = p.stock || 0;
     const agotado = stock <= 0;
@@ -417,8 +471,11 @@ searchInput.addEventListener('input', () => {
 });
 
 searchInput.addEventListener('keydown', e => {
+  if (e.key === 'ArrowDown') { e.preventDefault(); moverSeleccion(1); return; }
+  if (e.key === 'ArrowUp') { e.preventDefault(); moverSeleccion(-1); return; }
   if (e.key === 'Enter') {
     e.preventDefault();
+    if (agregarSeleccionado()) return;
     const valor = searchInput.value.trim();
     if (!valor) return;
     const encontrado = buscarCodigoExacto(valor);
@@ -432,13 +489,23 @@ searchInput.addEventListener('keydown', e => {
       abrirBarcodeModal(valor);
     }
   }
-  if (e.key === 'Escape') searchResults.classList.remove('visible');
+  if (e.key === 'Escape') { searchResults.classList.remove('visible'); searchIndex = -1; }
 });
 
 document.addEventListener('click', e => { if (!e.target.closest('.search-box')) searchResults.classList.remove('visible'); });
+
+function abrirAyuda() { document.getElementById('ayudaModal').classList.remove('hidden'); }
+function cerrarAyuda() { document.getElementById('ayudaModal').classList.add('hidden'); }
+
 document.addEventListener('keydown', e => {
-  if (e.key === 'F8') { e.preventDefault(); cobrar(); }
-  if (e.key === 'F9') { e.preventDefault(); ticket = []; actualizarTicket(); }
+  const cobroAbierto = !document.getElementById('cobroModal').classList.contains('hidden');
+  const pesoAbierto = !document.getElementById('pesoModal').classList.contains('hidden');
+  const barcodeAbierto = !document.getElementById('barcodeModal').classList.contains('hidden');
+  if (e.key === 'F1') { e.preventDefault(); abrirAyuda(); return; }
+  if (e.key === 'F2') { e.preventDefault(); searchInput.focus(); searchInput.select(); return; }
+  if (e.key === 'F8') { e.preventDefault(); if (!cobroAbierto && !pesoAbierto && !barcodeAbierto) cobrar(); return; }
+  if (e.key === 'F9') { e.preventDefault(); if (!cobroAbierto && !pesoAbierto && !barcodeAbierto) { ticket = []; actualizarTicket(); } return; }
+  if (e.key === 'Escape') { cerrarAyuda(); }
 });
 
 async function init() {
@@ -514,8 +581,8 @@ function guardarConfigPrinter() {
   const conexion = document.getElementById('printerConnection').value;
   const papel = document.getElementById('printerPaper').value;
   const ip = document.getElementById('printerIp').value.trim();
-  if (!nombre) { alert('Ingresa el nombre de la impresora'); return; }
-  if (conexion === 'red' && !ip) { alert('Ingresa la dirección IP de la impresora'); return; }
+  if (!nombre) { toastWarning('Ingresa el nombre de la impresora'); return; }
+  if (conexion === 'red' && !ip) { toastWarning('Ingresa la dirección IP de la impresora'); return; }
   const config = { nombre, conexion, papel, ip };
   localStorage.setItem('printerConfig', JSON.stringify(config));
   cargarConfigPrinter();
@@ -545,7 +612,7 @@ function actualizarEstadoPrinter() {
 
 async function probarImpresora() {
   const config = JSON.parse(localStorage.getItem('printerConfig') || 'null');
-  if (!config || !config.nombre) { alert('Primero configura una impresora'); return; }
+  if (!config || !config.nombre) { toastWarning('Primero configura una impresora'); return; }
   try {
     const res = await fetch(API + '/api/imprimir', {
       method: 'POST',
@@ -566,10 +633,10 @@ async function probarImpresora() {
       mostrarBarcodeToast('Impresion enviada correctamente');
     } else {
       const err = await res.json();
-      alert('Error: ' + (err.error || 'No se pudo imprimir'));
+      toastError('Error: ' + (err.error || 'No se pudo imprimir'));
     }
   } catch (e) {
-    alert('Error de conexion: ' + e.message);
+    toastError('Error de conexion: ' + e.message);
   }
 }
 
@@ -630,7 +697,7 @@ async function asignarCodigoABarcode(productoId) {
         codigo: barcodeScannedCode
       })
     });
-    if (!res.ok) { const d = await res.json(); alert(d.error || 'Error al asignar código'); return; }
+    if (!res.ok) { const d = await res.json(); toastError(d.error || 'Error al asignar código'); return; }
 
     await cargarProductos();
     agregarTicket(productoId);
@@ -638,7 +705,7 @@ async function asignarCodigoABarcode(productoId) {
     cerrarBarcodeModal();
     document.getElementById('asignarBarcodeModal').classList.add('hidden');
   } catch (e) {
-    alert('Error de conexión: ' + e.message);
+    toastError('Error de conexión: ' + e.message);
   }
 }
 

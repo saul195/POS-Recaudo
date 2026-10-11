@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>POS - Recaudo</title>
   <link rel="stylesheet" href="styles.css">
+  <script src="ui.js"></script>
 </head>
 <body>
   <header class="topbar">
@@ -20,6 +21,7 @@
       <a href="index.html" class="active">Cobro</a>
       <a href="inventario.html">Inventario</a>
       <a href="reportes.html">Reportes</a>
+      <button class="topbar-btn" onclick="abrirAyuda()" title="Atajos de teclado (F1)">?</button>
     </nav>
   </header>
 
@@ -162,7 +164,8 @@
       <div style="font-size:1.8rem;font-weight:700;color:var(--primary);margin:12px 0" id="cobroTotalDisplay">$0.00</div>
       <label style="font-size:0.9rem;color:var(--text-light);display:block;margin-bottom:4px;text-align:left">Dinero recibido</label>
       <input type="number" id="cobroRecibido" step="0.01" min="0" placeholder="0.00" style="width:100%;padding:12px;border:2px solid var(--border);border-radius:var(--radius);font-size:1.3rem;text-align:center;font-weight:600;box-sizing:border-box">
-      <div style="margin-top:12px;padding:10px;background:#f8f9fa;border-radius:var(--radius)">
+      <div class="cash-buttons" id="cashButtons"></div>
+      <div style="margin-top:12px;padding:10px;background:var(--panel);border-radius:var(--radius)">
         <span style="font-size:0.9rem;color:var(--text-light)">Cambio: </span>
         <span id="cobroCambioDisplay" style="font-size:1.4rem;font-weight:700;color:var(--primary)">$0.00</span>
       </div>
@@ -174,6 +177,26 @@
       <div class="modal-buttons" style="margin-top:16px">
         <button id="btnCobroConfirmar" class="btn btn-primary" disabled>Cobrar</button>
         <button id="btnCobroCancelar" class="btn btn-secondary">Cancelar</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="ayudaModal" class="modal hidden">
+    <div class="modal-content">
+      <span class="modal-close" onclick="cerrarAyuda()">&times;</span>
+      <h3>Atajos de teclado</h3>
+      <div class="ayuda-lista">
+        <div class="ayuda-item"><span class="desc">Buscar producto</span><span class="kbd">F2</span></div>
+        <div class="ayuda-item"><span class="desc">Cobrar venta</span><span class="kbd">F8</span></div>
+        <div class="ayuda-item"><span class="desc">Limpiar ticket</span><span class="kbd">F9</span></div>
+        <div class="ayuda-item"><span class="desc">Mostrar esta ayuda</span><span class="kbd">F1</span></div>
+        <div class="ayuda-item"><span class="desc">Cerrar ventanas</span><span class="kbd">Esc</span></div>
+        <div class="ayuda-item"><span class="desc">Confirmar peso</span><span class="kbd">Enter</span></div>
+        <div class="ayuda-item"><span class="desc">Navegar resultados de b&uacute;squeda</span><span class="kbd">&uarr; &darr;</span></div>
+        <div class="ayuda-item"><span class="desc">Agregar resultado seleccionado</span><span class="kbd">Enter</span></div>
+      </div>
+      <div class="modal-buttons" style="margin-top:16px">
+        <button class="btn btn-primary" onclick="cerrarAyuda()">Entendido</button>
       </div>
     </div>
   </div>

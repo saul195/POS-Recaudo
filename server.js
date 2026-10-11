@@ -466,6 +466,24 @@ function handleVentas(req, res, url) {
     }
   }
 
+  if (method === 'GET' && url.pathname === '/api/reportes/mensual') {
+    const anio = parseInt(url.searchParams.get('anio'), 10) || new Date().getFullYear();
+    const etiquetas = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+    const meses = etiquetas.map((e, i) => ({ mes: i + 1, etiqueta: e, ventas: 0, ingresos: 0 }));
+    const rows = parseRows(db.exec("SELECT fecha_venta, total FROM ventas WHERE substr(fecha_venta, 1, 4) = '" + anio + "'"));
+    for (const r of rows) {
+      const m = parseInt(String(r.fecha_venta).substr(5, 2), 10);
+      if (m >= 1 && m <= 12) {
+        meses[m - 1].ventas += 1;
+        meses[m - 1].ingresos += Math.round(r.total || 0);
+      }
+    }
+    const totalIngresos = meses.reduce((s, m) => s + m.ingresos, 0);
+    const totalVentas = meses.reduce((s, m) => s + m.ventas, 0);
+    sendJSON(res, 200, { anio, meses, totalIngresos, totalVentas });
+    return true;
+  }
+
   if (method === 'GET' && url.pathname === '/api/reportes') {
     const periodo = url.searchParams.get('periodo') || 'hoy';
     const hoy = fechaLocal();

@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Inventario - Recaudo</title>
   <link rel="stylesheet" href="styles.css">
+  <script src="ui.js"></script>
 </head>
 <body>
   <header class="topbar">
@@ -45,9 +46,14 @@
       <thead>
         <tr><th>C&oacute;digo</th><th>Nombre</th><th>Categor&iacute;a</th><th>Precio</th><th>Stock</th><th>Tipo</th><th>Acciones</th></tr>
       </thead>
-      <tbody id="invBody"></tbody>
-    </table>
-  </main>
+        <tbody id="invBody"></tbody>
+      </table>
+      <div class="paginacion">
+        <button id="btnPagAnterior" class="btn btn-secondary btn-sm">&lsaquo; Anterior</button>
+        <span class="pag-info"><span id="pagInfo"></span> &middot; <span id="pagPagina"></span></span>
+        <button id="btnPagSiguiente" class="btn btn-secondary btn-sm">Siguiente &rsaquo;</button>
+      </div>
+    </main>
 
   <div id="modalProducto" class="modal hidden">
     <div class="modal-content">
@@ -66,9 +72,9 @@
           </select>
         </div>
         <div class="full"><label>Nombre</label><input type="text" id="formNombre" placeholder="Nombre del producto"></div>
-        <div><label>Precio actual</label><input type="number" id="formPrecioActual" step="0.01" min="0" readonly style="background:#f0f0f0;cursor:not-allowed"></div>
+        <div><label>Precio actual</label><input type="number" id="formPrecioActual" step="0.01" min="0" readonly style="background:var(--panel);cursor:not-allowed"></div>
         <div><label>Nuevo precio</label><input type="number" id="formPrecio" step="0.01" min="0" placeholder="0.00"></div>
-        <div><label>Stock actual</label><input type="number" id="formStockActual" step="0.001" min="0" readonly style="background:#f0f0f0;cursor:not-allowed"></div>
+        <div><label>Stock actual</label><input type="number" id="formStockActual" step="0.001" min="0" readonly style="background:var(--panel);cursor:not-allowed"></div>
         <div>
           <label>Stock a agregar</label>
           <input type="number" id="formStockAgregar" step="0.001" min="0" placeholder="0">
@@ -106,6 +112,45 @@
     const API = '';
     function fmt(n) { return '$' + Number(n).toFixed(2); }
 
+    const POR_PAGINA = 20;
+    let paginaActual = 1;
+    let filtradosActuales = [];
+
+    function renderPagina() {
+      const total = filtradosActuales.length;
+      const totalPaginas = Math.max(1, Math.ceil(total / POR_PAGINA));
+      if (paginaActual > totalPaginas) paginaActual = totalPaginas;
+      if (paginaActual < 1) paginaActual = 1;
+      const inicio = (paginaActual - 1) * POR_PAGINA;
+      const pagina = filtradosActuales.slice(inicio, inicio + POR_PAGINA);
+      document.getElementById('invBody').innerHTML = pagina.map(p => `
+        <tr>
+          <td data-label="Código">${p.codigo || '-'}</td>
+          <td data-label="Nombre"><strong>${p.nombre}</strong></td>
+          <td data-label="Categoría">${p.categoria || '-'}</td>
+          <td data-label="Precio">${fmt(p.precio)}</td>
+          <td data-label="Stock">${p.requiere_peso ? (p.stock || 0) + ' kg' : ((p.stock || 0) % 1 === 0 ? (p.stock || 0) : (p.stock || 0).toFixed(3)) + ' uds'}</td>
+          <td data-label="Tipo">${p.requiere_peso ? '<span class="badge">Por peso</span>' : 'Unidad'}</td>
+          <td data-label="" class="actions">
+            <button class="btn btn-secondary btn-sm" onclick="editar(${p.id})">Editar</button>
+            <button class="btn btn-danger btn-sm" onclick="eliminar(${p.id})">Eliminar</button>
+          </td>
+        </tr>
+      `).join('');
+      document.getElementById('pagInfo').textContent = total
+        ? ('Mostrando ' + (inicio + 1) + '-' + (inicio + pagina.length) + ' de ' + total)
+        : 'Sin resultados';
+      document.getElementById('pagPagina').textContent = 'Página ' + paginaActual + ' de ' + totalPaginas;
+      document.getElementById('btnPagAnterior').disabled = paginaActual <= 1;
+      document.getElementById('btnPagSiguiente').disabled = paginaActual >= totalPaginas;
+    }
+
+    function irPagina(delta) {
+      paginaActual += delta;
+      renderPagina();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
     async function cargarTabla(search) {
       const q = search ? '?q=' + encodeURIComponent(search) : '';
       const res = await fetch(API + '/api/productos' + q);
@@ -121,20 +166,9 @@
       const conCodigo = lista.filter(p => p.codigo).length;
       const sinPrecio = lista.filter(p => !p.precio).length;
       document.getElementById('codigoIndicator').textContent = conCodigo + '/' + total + ' con código' + ' · ' + sinPrecio + ' sin precio';
-      document.getElementById('invBody').innerHTML = filtrados.map(p => `
-        <tr>
-          <td data-label="Código">${p.codigo || '-'}</td>
-          <td data-label="Nombre"><strong>${p.nombre}</strong></td>
-          <td data-label="Categoría">${p.categoria || '-'}</td>
-          <td data-label="Precio">${fmt(p.precio)}</td>
-          <td data-label="Stock">${p.requiere_peso ? (p.stock || 0) + ' kg' : ((p.stock || 0) % 1 === 0 ? (p.stock || 0) : (p.stock || 0).toFixed(3)) + ' uds'}</td>
-          <td data-label="Tipo">${p.requiere_peso ? '<span class="badge">Por peso</span>' : 'Unidad'}</td>
-          <td data-label="" class="actions">
-            <button class="btn btn-secondary btn-sm" onclick="editar(${p.id})">Editar</button>
-            <button class="btn btn-danger btn-sm" onclick="eliminar(${p.id})">Eliminar</button>
-          </td>
-        </tr>
-      `).join('');
+      filtradosActuales = filtrados;
+      paginaActual = 1;
+      renderPagina();
     }
 
     function abrirModal(p) {
@@ -186,7 +220,7 @@
         requiere_peso: document.getElementById('formRequierePeso').checked,
         stock: stockActual + stockAgregar
       };
-      if (!data.nombre) { alert('El nombre es obligatorio'); return; }
+      if (!data.nombre) { toastWarning('El nombre es obligatorio'); return; }
 
       let res;
       if (editId) {
@@ -203,7 +237,7 @@
         });
       }
       const result = await res.json();
-      if (!res.ok) { alert(result.error || 'Error al guardar'); return; }
+      if (!res.ok) { toastError(result.error || 'Error al guardar'); return; }
 
       document.getElementById('modalProducto').classList.add('hidden');
       document.getElementById('searchInv').value = '';
@@ -221,6 +255,9 @@
       document.getElementById('searchInv').value = '';
       cargarTabla();
     });
+    document.getElementById('btnPagAnterior').addEventListener('click', () => irPagina(-1));
+    document.getElementById('btnPagSiguiente').addEventListener('click', () => irPagina(1));
+
     document.getElementById('searchInv').addEventListener('input', e => cargarTabla(e.target.value));
     document.getElementById('filterCodigo').addEventListener('change', e => cargarTabla(document.getElementById('searchInv').value));
     document.getElementById('filterPrecio').addEventListener('change', e => cargarTabla(document.getElementById('searchInv').value));
@@ -353,9 +390,9 @@
           const result = await res.json();
           if (!res.ok) throw new Error(result.error);
           cargarTabla(document.getElementById('searchInv').value);
-          alert('Importados: ' + result.imported + ' de ' + result.total + ' productos');
+          toastSuccess('Importados: ' + result.imported + ' de ' + result.total + ' productos');
         } catch (err) {
-          alert('Error al importar: ' + err.message);
+          toastError('Error al importar: ' + err.message);
         }
       };
       reader.readAsText(file);
@@ -395,9 +432,9 @@
 
           cargarProductosCache();
           cargarTabla();
-          alert('Inventario reemplazado. Importados: ' + result.imported + ' productos');
+          toastSuccess('Inventario reemplazado. Importados: ' + result.imported + ' productos');
         } catch (err) {
-          alert('Error: ' + err.message);
+          toastError('Error: ' + err.message);
         }
       };
       reader.readAsText(file);
